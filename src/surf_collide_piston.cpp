@@ -88,7 +88,7 @@ void SurfCollidePiston::init()
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollidePiston::
-collide(Particle::OnePart *&ip, double *norm, double &dtremain, int isr)
+collide(Particle::OnePart *&ip, double *norm, double &dtremain, int isr, int isurf)
 {
   nsingle++;
 
