@@ -185,15 +185,16 @@ void Update::init()
   if (igroup < 0) error->all(FLERR,"Dump surf group ID does not exist");
   groupbit = surf->bitmask[igroup];
 
-  int *mysurfs = surf->mysurfs;
+  Surf::Line *lines;
+  Surf::Tri *tris;
   nslocal = surf->nlocal;
 
   nchoose = 0;
   for (int i = 0; i < nslocal; i++)
     if (domain->dimension == 2) {
-      if (surf->lines[mysurfs[i]].mask & groupbit) nchoose++;
+      if (lines[i].mask & groupbit) nchoose++;
     } else {
-      if (surf->tris[mysurfs[i]].mask & groupbit) nchoose++;
+      if (tris[i].mask & groupbit) nchoose++;
     }
   if (nchoose != nslocal) fprintf(screen,"On Proc %d, nslocal %d and nchoose %d are different\n",comm->me,nslocal,nchoose);
 
@@ -251,11 +252,8 @@ void Update::run(int nsteps)
   int n_end_of_step = modify->n_end_of_step;
   //int dynamic = 0;
    
-  nsurface = 0;
-  if (domain->dimension == 3) nsurface = surf->ntri;
-  else nsurface = surf->nline;
-  memory->create(heatflux,nsurface,"update:heatflux");
-  memory->create(heatflux2,nsurface,"update:heatflux2"); 
+  memory->create(heatflux,surf->nsurf,"update:heatflux");
+  memory->create(heatflux2,surf->nsurf,"update:heatflux2"); 
 
   // cellweightflag = 1 if grid-based particle weighting is ON
 
@@ -376,13 +374,10 @@ template < int DIM, int SURF > void Update::move()
    
   if((ntimestep > 1000) && ((ntimestep-1) % 1000 == 0))
    {
-   nsurface = 0;
-   if (domain->dimension == 3) nsurface = surf->ntri;
-   else nsurface = surf->nline;
-   for (int i = 0; i < nsurface; i++) heatflux[i] = heatflux2[i] = 0.0;
+   for (int i = 0; i < nsurf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
    for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[2]->vector_surf[i];
    MPI_Barrier(world);
-   MPI_Allreduce(heatflux,heatflux2,nsurface,MPI_DOUBLE,MPI_SUM,world);
+   MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
    }
 
   while (1) {
