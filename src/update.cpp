@@ -185,8 +185,8 @@ void Update::init()
   if (igroup < 0) error->all(FLERR,"Dump surf group ID does not exist");
   groupbit = surf->bitmask[igroup];
 
-  Surf::Line *lines;
-  Surf::Tri *tris;
+  Surf::Line *lines = surf->lines;
+  Surf::Tri *tris = surf->tris;
   nslocal = surf->nlocal;
 
   nchoose = 0;
