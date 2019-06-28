@@ -204,13 +204,13 @@ void Update::init()
   nchoose = 0;
   for (int i = 0; i < nslocal; i++)
     if (domain->dimension == 2) {
-      if (lines[i]].mask & groupbit) {
-        cglobal[nchoose] = lines[i];
+      if (lines[i].mask & groupbit) {
+        cglobal[nchoose] = lines[i].id;
         clocal[nchoose++] = i;
       }
     } else {
       if (tris[i].mask & groupbit) {
-        cglobal[nchoose] = tris[i];
+        cglobal[nchoose] = tris[i].id;
         clocal[nchoose++] = i;
       }
     }
