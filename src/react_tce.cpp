@@ -20,7 +20,7 @@
 #include "collide.h"
 #include "random_park.h"
 #include "error.h"
-
+#include "grid.h"
 
 // DEBUG
 #include "update.h"
@@ -54,16 +54,21 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 {
   double pre_etotal,ecc,e_excess;
   OneReaction *r;
+   
+  Grid::ChildInfo *cinfo = grid->cinfo;
+  Particle::OnePart *particles = particle->particles;
+  int *next = particle->next;
 
   Particle::Species *species = particle->species;
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
-
+  
   double pre_ave_rotdof = (species[isp].rotdof + species[jsp].rotdof)/2.0;
 
   int n = reactions[isp][jsp].n;
   if (n == 0) return 0;
   int *list = reactions[isp][jsp].list;
+  double nfrac_p3;
 
   // probablity to compare to reaction probability
 
@@ -79,8 +84,17 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     pre_etotal = pre_etrans + pre_erot + pre_evib;
 
-    ecc = pre_etrans; 
-    if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
+    // two options for total energy in TCE model
+    // 1: Bird's implementation from DS1V using the translational + weighted rotational energy
+    // 2: Using the sum of translational, rotational and vibrational energies
+     
+    if (birdflag) {
+       ecc = pre_etrans; 
+       if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;}
+    else {
+       ecc = pre_etotal;
+       if (pre_etotal+r->coeff[4] <= 0.0) continue; // Cover cases where coeff[1].neq.coeff[4]
+    }
 
     e_excess = ecc - r->coeff[1];
     if (e_excess <= 0.0) continue;
@@ -111,9 +125,23 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         if (recomb_species < 0) continue;
         int *sp2recomb = reactions[isp][jsp].sp2recomb;
         if (sp2recomb[recomb_species] != list[i]) continue;
+         
+        //  In this TCE implemenation recomb_density is taken as the
+        //  3rd body number density instead of the total number density
+         
+        int np3 = 0;
+        int icell = ip->icell;
+        int np = cinfo[icell].count;
+        int ip3 = cinfo[icell].first;
+        while (ip3 >= 0) {
+          if (particles[ip3].ispecies == react->recomb_species) np3 += 1;
+          ip3 = next[ip3];
+        }
+        if (np3 > 0) nfrac_p3 = np3/double(np);
+        else nfrac_p3 = 0.0;
 
         react_prob += recomb_boost * recomb_density * r->coeff[2] *
-          pow(ecc,r->coeff[3]) *
+          pow(ecc-r->coeff[1],r->coeff[3]) *  // extended to general recombination case with non-zero activation energy
           pow(1.0-r->coeff[1]/ecc,r->coeff[5]);
         break;
       }
