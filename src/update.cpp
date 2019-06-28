@@ -204,13 +204,13 @@ void Update::init()
   nchoose = 0;
   for (int i = 0; i < nslocal; i++)
     if (domain->dimension == 2) {
-      if (surf->lines[mysurfs[i]].mask & groupbit) {
-        cglobal[nchoose] = mysurfs[i];
+      if (lines[i]].mask & groupbit) {
+        cglobal[nchoose] = lines[i];
         clocal[nchoose++] = i;
       }
     } else {
-      if (surf->tris[mysurfs[i]].mask & groupbit) {
-        cglobal[nchoose] = mysurfs[i];
+      if (tris[i].mask & groupbit) {
+        cglobal[nchoose] = tris[i];
         clocal[nchoose++] = i;
       }
     }
@@ -374,7 +374,7 @@ template < int DIM, int SURF > void Update::move()
    
   if((ntimestep > 1000) && ((ntimestep-1) % 1000 == 0))
    {
-   for (int i = 0; i < nsurf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
+   for (int i = 0; i < surf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
    for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[2]->vector_surf[i];
    MPI_Barrier(world);
    MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
