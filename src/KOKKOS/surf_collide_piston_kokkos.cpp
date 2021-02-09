@@ -27,7 +27,7 @@ SurfCollidePistonKokkos::SurfCollidePistonKokkos(SPARTA *sparta, int narg, char 
   SurfCollidePiston(sparta, narg, arg)
 {
   k_nsingle = DAT::tdual_int_scalar("SurfCollide:nsingle");
-  d_nsingle = k_nsingle.view<DeviceType>();
+  d_nsingle = k_nsingle.d_view;
   h_nsingle = k_nsingle.h_view;
 }
 
@@ -62,8 +62,10 @@ SurfCollidePistonKokkos::SurfCollidePistonKokkos(SPARTA *sparta) :
 
   if (narg != 2) error->all(FLERR,"Illegal surf_collide piston command");
 
+  allowreact = 1;
+
   k_nsingle = DAT::tdual_int_scalar("SurfCollide:nsingle");
-  d_nsingle = k_nsingle.view<DeviceType>();
+  d_nsingle = k_nsingle.d_view;
   h_nsingle = k_nsingle.h_view;
 }
 

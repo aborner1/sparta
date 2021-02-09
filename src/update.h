@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -71,10 +71,16 @@ class Update : protected Pointers {
   bigint nscollide_running;
 
   int nstuck;                // # of particles stuck on surfs and deleted
-
+  int naxibad;               // # of particles where axisymm move was bad
+                             // in this case, bad means particle ended up
+                             // outside of final cell curved surf by epsilon
+                             // when move logic thinks it is inside cell
+  
   int reorder_period;        // # of timesteps between particle reordering
   int global_mem_limit;      // max # of bytes in arrays for rebalance and reordering
   int mem_limit_grid_flag;   // 1 if using size of grid as memory limit
+  void set_mem_limit_grid(int gnlocal = 0);
+  int have_mem_limit();      // 1 if have memory limit
 
   int copymode;          // 1 if copy of class (prevents deallocation of
                          //  base class when child copy is destroyed)
@@ -102,7 +108,7 @@ class Update : protected Pointers {
 
   int collide_react;         // 1 if any SurfCollide or React classes defined
   int nsc,nsr;               // copy of Collide/React data in Surf class
-  class SurfCollide **sc;    
+  class SurfCollide **sc;
   class SurfReact **sr;
 
   int bounce_tally;               // 1 if any bounces are ever tallied
@@ -115,7 +121,7 @@ class Update : protected Pointers {
   int nboundary_tally;     // # of Cmp tallying boundary bounce info this step
   class Compute **slist_active;   // list of active surf Computes this step
   class Compute **blist_active;   // list of active boundary Computes this step
-  
+
   int surf_pre_tally;       // 1 to log particle stats before surf collide
   int boundary_pre_tally;   // 1 to log particle stats before boundary collide
 
@@ -124,6 +130,14 @@ class Update : protected Pointers {
 
   int bounce_setup();
   virtual void bounce_set(bigint);
+
+  int nulist_surfcollide;
+  SurfCollide **ulist_surfcollide;
+
+  int dynamic;              // 1 if any classes do dynamic updates of params
+  void dynamic_setup();
+  void dynamic_update();
+
   void reset_timestep(bigint);
 
   //int axi_vertical_line(double, double *, double *, double, double, double,
@@ -211,6 +225,10 @@ E: Cannot set global surfmax when surfaces already exist
 
 This setting must be made before any surfac elements are
 read via the read_surf command.
+
+E: Global mem/limit setting cannot exceed 2GB
+
+Self-expanatory, prevents 32-bit interger overflow
 
 E: Timestep must be >= 0
 

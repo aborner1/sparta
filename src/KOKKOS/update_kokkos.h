@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -25,6 +25,7 @@
 #include "surf_collide_specular_kokkos.h"
 #include "surf_collide_vanish_kokkos.h"
 #include "surf_collide_piston_kokkos.h"
+#include "surf_collide_transparent_kokkos.h"
 #include "compute_boundary_kokkos.h"
 #include "compute_surf_kokkos.h"
 
@@ -39,7 +40,8 @@ namespace SPARTA_NS {
 struct s_UPDATE_REDUCE {
   int ntouch_one,nexit_one,nboundary_one,
       entryexit,ncomm_one,
-      nscheck_one,nscollide_one,nreact_one,nstuck,error_flag;
+      nscheck_one,nscollide_one,nreact_one,nstuck,
+      naxibad,error_flag;
   KOKKOS_INLINE_FUNCTION
   s_UPDATE_REDUCE() {
     ntouch_one    = 0;
@@ -50,6 +52,7 @@ struct s_UPDATE_REDUCE {
     nscollide_one = 0;
     nreact_one    = 0;
     nstuck        = 0;
+    naxibad       = 0;
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -62,6 +65,7 @@ struct s_UPDATE_REDUCE {
     nscollide_one += rhs.nscollide_one;
     nreact_one    += rhs.nreact_one   ;
     nstuck        += rhs.nstuck       ;
+    naxibad       += rhs.naxibad      ;
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -74,6 +78,7 @@ struct s_UPDATE_REDUCE {
     nscollide_one += rhs.nscollide_one;
     nreact_one    += rhs.nreact_one   ;
     nstuck        += rhs.nstuck       ;
+    naxibad       += rhs.naxibad      ;
   }
 };
 typedef struct s_UPDATE_REDUCE UPDATE_REDUCE;
@@ -83,7 +88,6 @@ struct TagUpdateMove{};
 
 class UpdateKokkos : public Update {
  public:
-  typedef ArrayTypes<DeviceType> AT;
   typedef UPDATE_REDUCE value_type;
 
   DAT::tdual_int_1d k_mlist;
@@ -112,10 +116,11 @@ class UpdateKokkos : public Update {
 
   t_cell_1d d_cells;
   t_sinfo_1d d_sinfo;
+  t_pcell_1d d_pcells;
 
-  Kokkos::Crs<int, SPADeviceType, void, int> d_csurfs;
-  Kokkos::Crs<int, SPADeviceType, void, int> d_csplits;
-  Kokkos::Crs<int, SPADeviceType, void, int> d_csubs;
+  Kokkos::Crs<int, DeviceType, void, int> d_csurfs;
+  Kokkos::Crs<int, DeviceType, void, int> d_csplits;
+  Kokkos::Crs<int, DeviceType, void, int> d_csubs;
 
   t_line_1d d_lines;
   t_tri_1d d_tris;
@@ -131,47 +136,51 @@ class UpdateKokkos : public Update {
   KKCopy<SurfCollideDiffuseKokkos> sc_kk_diffuse_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
   KKCopy<SurfCollideVanishKokkos> sc_kk_vanish_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
   KKCopy<SurfCollidePistonKokkos> sc_kk_piston_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
+  KKCopy<SurfCollideTransparentKokkos> sc_kk_transparent_copy[KOKKOS_MAX_SURF_COLL_PER_TYPE];
   KKCopy<ComputeBoundaryKokkos> blist_active_copy[KOKKOS_MAX_BLIST];
   KKCopy<ComputeSurfKokkos> slist_active_copy[KOKKOS_MAX_SLIST];
 
 
-  typedef Kokkos::DualView<int[11], SPADeviceType::array_layout, SPADeviceType> tdual_int_11;
-  typedef tdual_int_11::t_dev t_int_11;
-  typedef tdual_int_11::t_host t_host_int_11;
-  t_int_11 d_scalars;
-  t_host_int_11 h_scalars;
+  typedef Kokkos::DualView<int[12], DeviceType::array_layout, DeviceType> tdual_int_12;
+  typedef tdual_int_12::t_dev t_int_12;
+  typedef tdual_int_12::t_host t_host_int_12;
+  t_int_12 d_scalars;
+  t_host_int_12 h_scalars;
 
-  typename AT::t_int_scalar d_ntouch_one;
+  DAT::t_int_scalar d_ntouch_one;
   HAT::t_int_scalar h_ntouch_one;
 
-  typename AT::t_int_scalar d_nexit_one;
+  DAT::t_int_scalar d_nexit_one;
   HAT::t_int_scalar h_nexit_one;
 
-  typename AT::t_int_scalar d_nboundary_one;
+  DAT::t_int_scalar d_nboundary_one;
   HAT::t_int_scalar h_nboundary_one;
 
-  typename AT::t_int_scalar d_nmigrate;
+  DAT::t_int_scalar d_nmigrate;
   HAT::t_int_scalar h_nmigrate;
 
-  typename AT::t_int_scalar d_entryexit;
+  DAT::t_int_scalar d_entryexit;
   HAT::t_int_scalar h_entryexit;
 
-  typename AT::t_int_scalar d_ncomm_one;
+  DAT::t_int_scalar d_ncomm_one;
   HAT::t_int_scalar h_ncomm_one;
 
-  typename AT::t_int_scalar d_nscheck_one;
+  DAT::t_int_scalar d_nscheck_one;
   HAT::t_int_scalar h_nscheck_one;
 
-  typename AT::t_int_scalar d_nscollide_one;
+  DAT::t_int_scalar d_nscollide_one;
   HAT::t_int_scalar h_nscollide_one;
 
-  typename AT::t_int_scalar d_nreact_one;
+  DAT::t_int_scalar d_nreact_one;
   HAT::t_int_scalar h_nreact_one;
 
-  typename AT::t_int_scalar d_nstuck;
+  DAT::t_int_scalar d_nstuck;
   HAT::t_int_scalar h_nstuck;
 
-  typename AT::t_int_scalar d_error_flag;
+  DAT::t_int_scalar d_naxibad;
+  HAT::t_int_scalar h_naxibad;
+
+  DAT::t_int_scalar d_error_flag;
   HAT::t_int_scalar h_error_flag;
 
   void bounce_set(bigint);

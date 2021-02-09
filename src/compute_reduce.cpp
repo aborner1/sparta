@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -195,7 +195,7 @@ ComputeReduce::ComputeReduce(SPARTA *spa, int narg, char **arg) :
             modify->compute[icompute]->size_per_particle_cols != 0)
           error->all(FLERR,"Compute reduce compute does not "
                      "calculate a per-particle vector");
-        if (argindex[i] && 
+        if (argindex[i] &&
             modify->compute[icompute]->size_per_particle_cols == 0)
           error->all(FLERR,"Compute reduce compute does not "
                      "calculate a per-particle array");
@@ -517,7 +517,7 @@ double ComputeReduce::compute_one(int m, int flag)
     } else one = particles[flag].evib;
 
   // invoke compute if not previously invoked
-  // for per-grid compute, invoke post_process_grid() if necessary
+  // for per-grid compute, invoke post_process() method if necessary
 
   } else if (which[m] == COMPUTE) {
     Compute *c = modify->compute[vidx];
@@ -551,9 +551,11 @@ double ComputeReduce::compute_one(int m, int flag)
         c->invoked_flag |= INVOKED_PER_GRID;
       }
 
-      if (c->post_process_grid_flag) 
-        c->post_process_grid(aidx,-1,1,NULL,NULL,NULL,1);
-      
+      if (c->post_process_grid_flag)
+        c->post_process_grid(aidx,1,NULL,NULL,NULL,1);
+      else if (c->post_process_isurf_grid_flag)
+        c->post_process_isurf_grid();
+
       if (aidx == 0 || c->post_process_grid_flag) {
         double *cvec = c->vector_grid;
         int n = grid->nlocal;

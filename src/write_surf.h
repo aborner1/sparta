@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -28,9 +28,38 @@ namespace SPARTA_NS {
 
 class WriteSurf : protected Pointers {
  public:
+  int statflag;
+
   WriteSurf(class SPARTA *);
   void command(int, char **);
-  void write_file(FILE *);
+
+ private:
+  int me,nprocs;
+  int dim;
+  FILE *fp;
+
+  int pointflag;             // 1/0 to include/exclude Points section in file
+  int multiproc;             // 0 = proc 0 writes for all
+                             // else # of procs writing files
+  int filewriter;            // 1 if this proc writes to file, else 0
+  int icluster;              // which cluster I am in
+  int nclusterprocs;         // # of procs in my cluster that write to one file
+  int fileproc;              // ID of proc in my cluster who writes to file
+
+  struct SurfIDType {
+    surfint id;
+    int type;
+  };
+
+  void write_file(char *);
+  void write_file_all_points(char *);
+  void write_file_all_nopoints(char *);
+  void write_file_distributed_points(char *);
+  void write_file_distributed_nopoints(char *);
+
+  void write_base(char *);
+  void open(char *);
+  void write_header(int);
 };
 
 }

@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -39,10 +39,12 @@ class Modify : protected Pointers {
   virtual void start_of_step();
   virtual void end_of_step();
 
-  virtual void add_grid_one(int, int);
   virtual int pack_grid_one(int, char *, int);
   virtual int unpack_grid_one(int, char *);
-  virtual void compress_grid(int);
+  virtual void copy_grid_one(int, int);
+  virtual void add_grid_one();
+  virtual void reset_grid_count(int);
+  virtual void grid_changed();
 
   void add_fix(int, char **);
   void delete_fix(const char *);

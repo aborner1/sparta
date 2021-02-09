@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -49,7 +49,7 @@ Compute::Compute(SPARTA *sparta, int narg, char **arg) : Pointers(sparta)
 
   scalar_flag = vector_flag = array_flag = 0;
   per_particle_flag = per_grid_flag = per_surf_flag = 0;
-  post_process_grid_flag = 0;
+  post_process_grid_flag = post_process_isurf_grid_flag = 0;
   surf_tally_flag = boundary_tally_flag = 0;
 
   timeflag = 0;

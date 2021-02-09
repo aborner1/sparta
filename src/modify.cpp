@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -53,6 +53,11 @@ Modify::Modify(SPARTA *sparta) : Pointers(sparta)
 
   ncompute = maxcompute = 0;
   compute = NULL;
+
+  // n_pergrid needs to be initialized here because ReadSurf calls
+  //  Modify::reset_grid_count without calling Modify::init
+
+  n_pergrid = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -155,17 +160,6 @@ void Modify::end_of_step()
 }
 
 /* ----------------------------------------------------------------------
-   add_grid_one call, only for relevant fixes
-   invoked by adapt_grid and fix adapt when new child cells are created
-------------------------------------------------------------------------- */
-
-void Modify::add_grid_one(int icell, int flag)
-{
-  for (int i = 0; i < n_pergrid; i++)
-    fix[list_pergrid[i]]->add_grid_one(icell,flag);
-}
-
-/* ----------------------------------------------------------------------
    pack_grid_one call, only for relevant fixes
    invoked by load balancer when grid cells migrate
 ------------------------------------------------------------------------- */
@@ -192,25 +186,54 @@ int Modify::unpack_grid_one(int icell, char *buf)
 }
 
 /* ----------------------------------------------------------------------
-   compress_grid call, only for relevant fixes
-   invoked by load balancer when grid cells migrate
+   copy_grid call, only for relevant fixes
+   invoked when a grod cell is removed
 ------------------------------------------------------------------------- */
 
-void Modify::compress_grid(int flag)
+void Modify::copy_grid_one(int icell, int jcell)
 {
-  if (flag == 0)
-    for (int i = 0; i < n_pergrid; i++)
-      fix[list_pergrid[i]]->compress_grid();
-  else
-    for (int i = 0; i < n_pergrid; i++)
-      fix[list_pergrid[i]]->post_compress_grid();
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->copy_grid_one(icell,jcell);
+}
+
+/* ----------------------------------------------------------------------
+   add_grid_one call, only for relevant fixes
+   invoked by adapt_grid and fix adapt when new child cells are created
+------------------------------------------------------------------------- */
+
+void Modify::add_grid_one()
+{
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->add_grid_one();
+}
+
+/* ----------------------------------------------------------------------
+   reset_grid call, only for relevant fixes
+   invoked after all grid cell removals
+------------------------------------------------------------------------- */
+
+void Modify::reset_grid_count(int nlocal)
+{
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->reset_grid_count(nlocal);
+}
+
+/* ----------------------------------------------------------------------
+   grid_changed call, only for relevant fixes
+   invoked after per-processor list of grid cells has changed
+------------------------------------------------------------------------- */
+
+void Modify::grid_changed()
+{
+  for (int i = 0; i < n_pergrid; i++)
+    fix[list_pergrid[i]]->grid_changed();
 }
 
 /* ----------------------------------------------------------------------
    invoke add_particle() method, only for relevant fixes
 ------------------------------------------------------------------------- */
 
-void Modify::add_particle(int index, double temp_thermal, 
+void Modify::add_particle(int index, double temp_thermal,
                           double temp_rot, double temp_vib, double *vstream)
 {
   for (int i = 0; i < n_add_particle; i++)
@@ -245,7 +268,7 @@ void Modify::surf_react(Particle::OnePart *iorig, int &i, int &j)
 
 void Modify::add_fix(int narg, char **arg)
 {
-  if (domain->box_exist == 0) 
+  if (domain->box_exist == 0)
     error->all(FLERR,"Fix command before simulation box is defined");
   if (narg < 2) error->all(FLERR,"Illegal fix command");
 

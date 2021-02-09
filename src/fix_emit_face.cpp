@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -88,15 +88,15 @@ FixEmitFace::FixEmitFace(SPARTA *sparta, int narg, char **arg) :
 
   // error checks
 
-  if (domain->dimension == 2 && (faces[ZLO] || faces[ZHI])) 
+  if (domain->dimension == 2 && (faces[ZLO] || faces[ZHI]))
     error->all(FLERR,"Cannot use fix emit/face in z dimension "
                "for 2d simulation");
-  if (domain->axisymmetric && faces[YLO]) 
+  if (domain->axisymmetric && faces[YLO])
     error->all(FLERR,"Cannot use fix emit/face on ylo face for "
                "axisymmetric model");
-  if (np > 0 && perspecies) 
+  if (np > 0 && perspecies)
     error->all(FLERR,"Cannot use fix emit/face n > 0 with perspecies yes");
-  if (np > 0 && subsonic) 
+  if (np > 0 && subsonic)
     error->all(FLERR,"Cannot use fix emit/face n > 0 with subsonic");
 
   // task list and subsonic data structs
@@ -128,6 +128,10 @@ FixEmitFace::~FixEmitFace()
 
 void FixEmitFace::init()
 {
+  // invoke FixEmit::init() to set flags
+
+  FixEmit::init();
+
   // copies of class data before invoking parent init() and count_task()
 
   dimension = domain->dimension;
@@ -137,9 +141,6 @@ void FixEmitFace::init()
   nspecies = particle->mixture[imix]->nspecies;
   fraction = particle->mixture[imix]->fraction;
   cummulative = particle->mixture[imix]->cummulative;
-
-  lines = surf->lines;
-  tris = surf->tris;
 
   // subsonic prefactor
 
@@ -153,11 +154,11 @@ void FixEmitFace::init()
   for (int m = 0; m < nspecies; m++) {
     int ispecies = particle->mixture[imix]->species[m];
     avemass += fraction[m] * particle->species[ispecies].mass;
-    avegamma += fraction[m] * (1.0 + 2.0 / 
+    avegamma += fraction[m] * (1.0 + 2.0 /
                                (3.0 + particle->species[ispecies].rotdof));
   }
 
-  soundspeed_mixture = sqrt(avegamma * update->boltz * 
+  soundspeed_mixture = sqrt(avegamma * update->boltz *
                             particle->mixture[imix]->temp_thermal / avemass);
 
   // cannot inflow thru periodic boundary
@@ -185,7 +186,7 @@ void FixEmitFace::init()
     normal[0] = normal[1] = normal[2] = 0.0;
     if (i % 2 == 0) normal[i/2] = 1.0;
     else normal[i/2] = -1.0;
-    double indot = vstream[0]*normal[0] + vstream[1]*normal[1] + 
+    double indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
       vstream[2]*normal[2];
     if (indot < 0.0) flag = 1;
   }
@@ -199,11 +200,9 @@ void FixEmitFace::init()
 
   realloc_nspecies();
 
-  // invoke FixEmit::init() to populate task list
-  // it calls create_task() for each grid cell
+  // create tasks for all grid cells
 
-  ntask = 0;
-  FixEmit::init();
+  create_tasks();
 
   // if Np > 0, nper = # of insertions per task
   // set nthresh so as to achieve exactly Np insertions
@@ -226,13 +225,19 @@ void FixEmitFace::init()
   }
 }
 
-/* ---------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------
+   create tasks for one grid cell
+   add them to tasks list and increment ntasks
+------------------------------------------------------------------------- */
 
-int FixEmitFace::create_task(int icell)
+void FixEmitFace::create_task(int icell)
 {
   int i,j,n,iface,flag,isp,extflag;
   int *cflags;
   double indot,area,ntargetsp;
+
+  Surf::Line *lines = surf->lines;
+  Surf::Tri *tris = surf->tris;
 
   Grid::ChildCell *cells = grid->cells;
   Grid::ChildInfo *cinfo = grid->cinfo;
@@ -243,8 +248,8 @@ int FixEmitFace::create_task(int icell)
 
   // corners[i][j] = J corner points of face I of a grid cell
   // works for 2d quads and 3d hexes
-  
-  int corners[6][4] = {{0,2,4,6}, {1,3,5,7}, {0,1,4,5}, {2,3,6,7}, 
+
+  int corners[6][4] = {{0,2,4,6}, {1,3,5,7}, {0,1,4,5}, {2,3,6,7},
 		       {0,1,2,3}, {4,5,6,7}};
   int nface_pts = 4;
   if (domain->dimension == 2) nface_pts = 2;
@@ -274,14 +279,14 @@ int FixEmitFace::create_task(int icell)
       else if (cinfo[icell].type == OVERLAP) {
         flag = 1;
         cflags = cinfo[icell].corner;
-        
+
         extflag = 0;
         for (j = 0; j < nface_pts; j++) {
           if (cflags[corners[iface][j]] == OUTSIDE) extflag = 1;
           else if (cflags[corners[iface][j]] == INSIDE) flag = 0;
         }
         if (!extflag) flag = 0;
-      
+
         if (flag && dimension == 2) {
           for (j = 0; j < cells[icell].nsurf; j++) {
             n = cells[icell].csurfs[j];
@@ -305,7 +310,7 @@ int FixEmitFace::create_task(int icell)
         }
       }
     }
-    
+
     // no insertions on this face
 
     if (!flag) continue;
@@ -369,8 +374,8 @@ int FixEmitFace::create_task(int icell)
     // depends on dimension and axisymmetry
 
     if (iface == XLO || iface == XHI) {
-      if (dimension == 3) 
-        area = (cells[icell].hi[1]-cells[icell].lo[1]) * 
+      if (dimension == 3)
+        area = (cells[icell].hi[1]-cells[icell].lo[1]) *
           (cells[icell].hi[2]-cells[icell].lo[2]);
       else if (domain->axisymmetric)
         area = (cells[icell].hi[1]*cells[icell].hi[1] -
@@ -378,16 +383,16 @@ int FixEmitFace::create_task(int icell)
       else area = cells[icell].hi[1]-cells[icell].lo[1];
     } else if (iface == YLO || iface == YHI) {
       if (dimension == 3)
-        area = (cells[icell].hi[0]-cells[icell].lo[0]) * 
+        area = (cells[icell].hi[0]-cells[icell].lo[0]) *
           (cells[icell].hi[2]-cells[icell].lo[2]);
       else if (domain->axisymmetric)
         area = 2.0*MY_PI*cells[icell].hi[1] *
           (cells[icell].hi[0]-cells[icell].lo[0]);
       else area = cells[icell].hi[0]-cells[icell].lo[0];
     } else if (iface == ZLO || iface == ZHI) {
-      area = (cells[icell].hi[0]-cells[icell].lo[0]) * 
+      area = (cells[icell].hi[0]-cells[icell].lo[0]) *
 	(cells[icell].hi[1]-cells[icell].lo[1]);
-    }      
+    }
     tasks[ntask].area = area;
 
     // set ntarget and ntargetsp via mol_inflow()
@@ -405,7 +410,7 @@ int FixEmitFace::create_task(int icell)
 
     if (!subsonic) {
       if (tasks[ntask].ntarget == 0.0) continue;
-      if (tasks[ntask].ntarget >= MAXSMALLINT) 
+      if (tasks[ntask].ntarget >= MAXSMALLINT)
         error->one(FLERR,
                    "Fix emit/face insertion count exceeds 32-bit int");
     }
@@ -425,10 +430,6 @@ int FixEmitFace::create_task(int icell)
 
     ntask++;
   }
-
-  // return # of tasks for this cell
-
-  return ntask-ntaskorig;
 }
 
 /* ----------------------------------------------------------------------
@@ -521,12 +522,12 @@ void FixEmitFace::perform_task_onepass()
 	  do {
 	    do beta_un = (6.0*random->uniform() - 3.0);
 	    while (beta_un + scosine < 0.0);
-	    normalized_distbn_fn = 2.0 * (beta_un + scosine) / 
+	    normalized_distbn_fn = 2.0 * (beta_un + scosine) /
 	      (scosine + sqrt(scosine*scosine + 2.0)) *
-	      exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) - 
+	      exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
 		  beta_un*beta_un);
 	  } while (normalized_distbn_fn < random->uniform());
-	  
+	
           v[ndim] = beta_un*vscale[isp]*normal[ndim] + vstream[ndim];
 
           theta = MY_2PI * random->uniform();
@@ -544,7 +545,7 @@ void FixEmitFace::perform_task_onepass()
           p->flag = PINSERT;
           p->dtremain = dt * random->uniform();
 
-          if (nfix_add_particle) 
+          if (nfix_add_particle)
             modify->add_particle(particle->nlocal-1,temp_thermal,
                                  temp_rot,temp_vib,vstream);
 	}
@@ -580,9 +581,9 @@ void FixEmitFace::perform_task_onepass()
 	  do {
 	    beta_un = (6.0*random->uniform() - 3.0);
 	  } while (beta_un + scosine < 0.0);
-	  normalized_distbn_fn = 2.0 * (beta_un + scosine) / 
+	  normalized_distbn_fn = 2.0 * (beta_un + scosine) /
 	    (scosine + sqrt(scosine*scosine + 2.0)) *
-	    exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) - 
+	    exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
 		beta_un*beta_un);
 	} while (normalized_distbn_fn < random->uniform());
 	
@@ -603,7 +604,7 @@ void FixEmitFace::perform_task_onepass()
         p->flag = PINSERT;
         p->dtremain = dt * random->uniform();
 
-        if (nfix_add_particle) 
+        if (nfix_add_particle)
           modify->add_particle(particle->nlocal-1,temp_thermal,
                                temp_rot,temp_vib,vstream);
       }
@@ -714,9 +715,9 @@ void FixEmitFace::perform_task_twopass()
           do {
             do beta_un = (6.0*random->uniform() - 3.0);
             while (beta_un + scosine < 0.0);
-            normalized_distbn_fn = 2.0 * (beta_un + scosine) / 
+            normalized_distbn_fn = 2.0 * (beta_un + scosine) /
               (scosine + sqrt(scosine*scosine + 2.0)) *
-              exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) - 
+              exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
                   beta_un*beta_un);
           } while (normalized_distbn_fn < random->uniform());
 
@@ -737,7 +738,7 @@ void FixEmitFace::perform_task_twopass()
           p->flag = PINSERT;
           p->dtremain = dt * random->uniform();
 
-          if (nfix_add_particle) 
+          if (nfix_add_particle)
             modify->add_particle(particle->nlocal-1,temp_thermal,
                 temp_rot,temp_vib,vstream);
         }
@@ -767,9 +768,9 @@ void FixEmitFace::perform_task_twopass()
           do {
             beta_un = (6.0*random->uniform() - 3.0);
           } while (beta_un + scosine < 0.0);
-          normalized_distbn_fn = 2.0 * (beta_un + scosine) / 
+          normalized_distbn_fn = 2.0 * (beta_un + scosine) /
             (scosine + sqrt(scosine*scosine + 2.0)) *
-            exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) - 
+            exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
                 beta_un*beta_un);
         } while (normalized_distbn_fn < random->uniform());
 
@@ -790,7 +791,7 @@ void FixEmitFace::perform_task_twopass()
         p->flag = PINSERT;
         p->dtremain = dt * random->uniform();
 
-        if (nfix_add_particle) 
+        if (nfix_add_particle)
           modify->add_particle(particle->nlocal-1,temp_thermal,
               temp_rot,temp_vib,vstream);
       }
@@ -854,7 +855,7 @@ void FixEmitFace::subsonic_inflow()
   int isp,icell;
   double mass,indot,area,nrho,temp_thermal,vscale,ntargetsp;
   double *vstream,*normal;
-  
+
   Particle::Species *species = particle->species;
   Grid::ChildInfo *cinfo = grid->cinfo;
   int *mspecies = particle->mixture[imix]->species;
@@ -870,7 +871,7 @@ void FixEmitFace::subsonic_inflow()
     nrho = tasks[i].nrho;
     temp_thermal = tasks[i].temp_thermal;
     icell = tasks[i].icell;
-      
+
     tasks[i].ntarget = 0.0;
     for (isp = 0; isp < nspecies; isp++) {
       mass = species[mspecies[isp]].mass;
@@ -881,7 +882,7 @@ void FixEmitFace::subsonic_inflow()
       tasks[i].ntarget += ntargetsp;
       if (perspecies) tasks[i].ntargetsp[isp] = ntargetsp;
     }
-    if (tasks[i].ntarget >= MAXSMALLINT) 
+    if (tasks[i].ntarget >= MAXSMALLINT)
       error->one(FLERR,
                  "Fix emit/face subsonic insertion count exceeds 32-bit int");
   }
@@ -994,7 +995,7 @@ void FixEmitFace::subsonic_grid()
 
     // compute/store nrho, 3 temps, vstream for task
     // also vscale for PONLY
-    // if sound speed = 0.0 due to <= 1 particle in cell or 
+    // if sound speed = 0.0 due to <= 1 particle in cell or
     //   all particles having COM velocity, set via mixture properties
 
     vstream = tasks[i].vstream;
@@ -1015,15 +1016,15 @@ void FixEmitFace::subsonic_grid()
         ke = mv[3]/np - (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
         temp_thermal_cell = tprefactor * ke;
       } else temp_thermal_cell = particle->mixture[imix]->temp_thermal;
-      
+
       press_cell = nrho_cell * boltz * temp_thermal_cell;
       if (np) {
         mass_cell = masstot / np;
         gamma_cell = gamma / np;
         soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
       } else soundspeed_cell = soundspeed_mixture;
-      
-      tasks[i].nrho = nrho_cell + 
+
+      tasks[i].nrho = nrho_cell +
         (psubsonic - press_cell) / (soundspeed_cell*soundspeed_cell);
       temp_thermal_cell = psubsonic / (boltz * tasks[i].nrho);
       if (temp_thermal_cell > TEMPLIMIT) {
@@ -1034,7 +1035,7 @@ void FixEmitFace::subsonic_grid()
       if (np)  {
         ndim = tasks[i].ndim;
         sign = tasks[i].normal[ndim];
-        vstream[ndim] += sign * 
+        vstream[ndim] += sign *
           (psubsonic - press_cell) / (massrho_cell*soundspeed_cell);
       }
 
@@ -1054,106 +1055,6 @@ void FixEmitFace::subsonic_grid()
 
   if (!subsonic_warning)
     subsonic_warning = subsonic_temperature_check(temp_exceed_flag,tempmax);
-}
-
-/* ----------------------------------------------------------------------
-   pack one task into buf
-   return # of bytes packed
-   if not memflag, only return count, do not fill buf
-------------------------------------------------------------------------- */
-
-int FixEmitFace::pack_task(int itask, char *buf, int memflag)
-{
-  char *ptr = buf;
-  if (memflag) memcpy(ptr,&tasks[itask],sizeof(Task));
-  ptr += sizeof(Task);
-  ptr = ROUNDUP(ptr);
-
-  // pack task vectors
-  // vscale is allocated, but not communicated, since updated every step
-
-  if (perspecies) {
-    if (memflag) memcpy(ptr,tasks[itask].ntargetsp,nspecies*sizeof(double));
-    ptr += nspecies*sizeof(double);
-  }
-
-  return ptr-buf;
-}
-
-/* ----------------------------------------------------------------------
-   unpack one task from buf
-------------------------------------------------------------------------- */
-
-int FixEmitFace::unpack_task(char *buf, int icell)
-{
-  char *ptr = buf;
-
-  if (ntask == ntaskmax) grow_task();
-  double *ntargetsp = tasks[ntask].ntargetsp;
-  double *vscale = tasks[ntask].vscale;
-
-  memcpy(&tasks[ntask],ptr,sizeof(Task));
-  ptr += sizeof(Task);
-  ptr = ROUNDUP(ptr);
-
-  // unpack task vectors
-  // vscale is allocated, but not communicated, since updated every step
-
-  if (perspecies) {
-    memcpy(ntargetsp,ptr,nspecies*sizeof(double));
-    ptr += nspecies*sizeof(double);
-  }
-
-  tasks[ntask].ntargetsp = ntargetsp;
-  tasks[ntask].vscale = vscale;
-
-  // reset task icell and pcell
-  // if a split cell, set pcell via split() which calls update->split()
-  //   which will use current sub cells of icell
-
-  tasks[ntask].icell = icell;
-  if (grid->cells[icell].nsplit == 1) tasks[ntask].pcell = icell;
-  else tasks[ntask].pcell = split(icell,tasks[ntask].iface);
-
-  ntask++;
-  return ptr-buf;
-}
-
-/* ----------------------------------------------------------------------
-   copy N tasks starting at index oldfirst to index first
-------------------------------------------------------------------------- */
-
-void FixEmitFace::copy_task(int icell, int n, int first, int oldfirst)
-{
-  // reset icell in each copied task
-  // copy task vectors
-  // vscale is allocated, but not copied, since updated every step
-
-  if (first == oldfirst) {
-    for (int i = 0; i < n; i++) {
-      tasks[first].icell = icell;
-      first++;
-    }
-
-  } else {
-    for (int i = 0; i < n; i++) {
-      double *ntargetsp = tasks[first].ntargetsp;
-      double *vscale = tasks[first].vscale;
-
-      memcpy(&tasks[first],&tasks[oldfirst],sizeof(Task));
-      if (perspecies)
-        memcpy(ntargetsp,tasks[oldfirst].ntargetsp,nspecies*sizeof(double));
-
-      tasks[first].ntargetsp = ntargetsp;
-      tasks[first].vscale = vscale;
-
-      tasks[first].icell = icell;
-      first++;
-      oldfirst++;
-    }
-  }
-
-  ntask += n;
 }
 
 /* ----------------------------------------------------------------------
@@ -1212,25 +1113,6 @@ void FixEmitFace::realloc_nspecies()
 }
 
 /* ----------------------------------------------------------------------
-   reset pcell for all compress task entries
-   called from Grid::compress() after grid cells have been compressed
-   wait to do this until now b/c split cells accessed by split()
-     are setup in Grid::compress() between compress_grid() 
-     and post_compress_grid()
-------------------------------------------------------------------------- */
-
-void FixEmitFace::post_compress_grid()
-{
-  Grid::ChildCell *cells = grid->cells;
-
-  for (int i = 0; i < ntask; i++) {
-    int icell = tasks[i].icell;
-    if (cells[icell].nsplit == 1) tasks[i].pcell = icell;
-    else tasks[i].pcell = split(icell,tasks[i].iface);
-  }
-}
-
-/* ----------------------------------------------------------------------
    process keywords specific to this class
 ------------------------------------------------------------------------- */
 
@@ -1252,7 +1134,7 @@ int FixEmitFace::option(int narg, char **arg)
     if (strcmp(arg[2],"NULL") == 0) subsonic_style = PONLY;
     else {
       tsubsonic = input->numeric(FLERR,arg[2]);
-      if (tsubsonic <= 0.0) 
+      if (tsubsonic <= 0.0)
         error->all(FLERR,"Subsonic temperature cannot be <= 0.0");
       nsubsonic = psubsonic / (update->boltz * tsubsonic);
     }
@@ -1263,7 +1145,7 @@ int FixEmitFace::option(int narg, char **arg)
     twopass = 1;
     return 1;
   }
-  
+
   error->all(FLERR,"Illegal fix emit/face command");
   return 0;
 }

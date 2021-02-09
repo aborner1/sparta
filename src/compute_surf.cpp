@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -38,9 +38,6 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
   Compute(sparta, narg, arg)
 {
   if (narg < 5) error->all(FLERR,"Illegal compute surf command");
-
-  if (surf->implicit) 
-    error->all(FLERR,"Cannot use compute surf with implicit surfs");
 
   int igroup = surf->find_group(arg[2]);
   if (igroup < 0) error->all(FLERR,"Compute surf group ID does not exist");
@@ -77,19 +74,26 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
     iarg++;
   }
 
-  surf_tally_flag = 1;
-  timeflag = 1;
-  per_surf_flag = 1;
   ntotal = ngroup*nvalue;
+
+  per_surf_flag = 1;
   size_per_surf_cols = ntotal;
 
+  surf_tally_flag = 1;
+  timeflag = 1;
+
   ntally = maxtally = 0;
-  surf2tally = tally2surf = NULL;
   array_surf_tally = NULL;
-  vector_surf = NULL;
+  tally2surf = NULL;
+
+  maxsurf = 0;
+  array_surf = NULL;
   normflux = NULL;
-  nfactor_previous = 0.0;
-  last_tallysum = -1;
+  combined = 0;
+
+  hash = new MyHash;
+
+  dim = domain->dimension;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -99,63 +103,28 @@ ComputeSurf::~ComputeSurf()
   if (copy || copymode) return;
 
   delete [] which;
-  memory->destroy(surf2tally);
-  memory->destroy(tally2surf);
   memory->destroy(array_surf_tally);
-  memory->destroy(vector_surf);
+  memory->destroy(tally2surf);
+  memory->destroy(array_surf);
   memory->destroy(normflux);
+  delete hash;
 }
 
 /* ---------------------------------------------------------------------- */
 
 void ComputeSurf::init()
 {
+  if (!surf->exist)
+    error->all(FLERR,"Cannot use compute surf when surfs do not exist");
+  if (surf->implicit)
+    error->all(FLERR,"Cannot use compute surf with implicit surfs");
+
   if (ngroup != particle->mixture[imix]->ngroup)
     error->all(FLERR,"Number of groups in compute surf mixture has changed");
 
-  // local copies
+  // set normflux for all owned + ghost surfs
 
-  dimension = domain->dimension;
-  lines = surf->lines;
-  tris = surf->tris;
-
-  // allocate and initialize surf2tally indices
-  // nsurf = all explicit surfs in this procs grid cells
-
-  nsurf = surf->nlocal + surf->nghost;
-
-  memory->destroy(surf2tally);
-  memory->create(surf2tally,nsurf,"surf:surf2tally");
-  for (int i = 0; i < nsurf; i++) surf2tally[i] = -1;
-
-  // normalization nfactor = dt/fnum
-
-  nfactor = update->dt/update->fnum;
-  nfactor_inverse = 1.0/nfactor;
-
-  // normflux for all surface elements, based on area and timestep size
-  // store inverse, so can multipy by scale factor when tally
-  // store for all surf elements, b/c don't know which ones I need to normalize
-  // one-time only initialization unless timestep or fnum changes between runs
-
-  if (nfactor != nfactor_previous)  {
-    memory->destroy(normflux);
-    memory->create(normflux,nsurf,"surf:normflux");
-
-    int dimension = domain->dimension;
-    int axisymmetric = domain->axisymmetric;
-    double tmp;
-
-    for (int i = 0; i < nsurf; i++) {
-      if (dimension == 3) normflux[i] = surf->tri_size(i,tmp);
-      else if (axisymmetric) normflux[i] = surf->axi_line_size(i);
-      else normflux[i] = surf->line_size(i);
-      normflux[i] *= nfactor;
-      normflux[i] = 1.0/normflux[i];
-    }
-  }
-
-  nfactor_previous = nfactor;
+  init_normflux();
 
   // set weightflag if cell weighting is enabled
   // else weight = 1.0 for all particles
@@ -167,6 +136,44 @@ void ComputeSurf::init()
   // initialize tally array in case accessed before a tally timestep
 
   clear();
+
+  combined = 0;
+}
+
+/* ----------------------------------------------------------------------
+   set normflux for all surfs I store
+   all: just nlocal
+   distributed: nlocal + nghost
+   called by init before each run (in case dt or fnum has changed)
+   called whenever grid changes
+------------------------------------------------------------------------- */
+
+void ComputeSurf::init_normflux()
+{
+  // normalization nfactor = dt/fnum
+
+  double nfactor = update->dt/update->fnum;
+  nfactor_inverse = 1.0/nfactor;
+
+  // normflux for all surface elements, based on area and timestep size
+  // nsurf = all explicit surfs in this procs grid cells
+  // store inverse, so can multipy by scale factor when tally
+  // store for all surf elements, b/c don't know which ones I need to normalize
+
+  int nsurf = surf->nlocal + surf->nghost;
+  memory->destroy(normflux);
+  memory->create(normflux,nsurf,"surf:normflux");
+
+  int axisymmetric = domain->axisymmetric;
+  double tmp;
+
+  for (int i = 0; i < nsurf; i++) {
+    if (dim == 3) normflux[i] = surf->tri_size(i,tmp);
+    else if (axisymmetric) normflux[i] = surf->axi_line_size(i);
+    else normflux[i] = surf->line_size(i);
+    normflux[i] *= nfactor;
+    normflux[i] = 1.0/normflux[i];
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -184,15 +191,20 @@ void ComputeSurf::compute_per_surf()
 
 void ComputeSurf::clear()
 {
-  // reset all set surf2tally values to -1 and ntally to 0
+  lines = surf->lines;
+  tris = surf->tris;
+
+  // clear hash of tallied surf IDs
   // called by Update at beginning of timesteps surf tallying is done
 
-  for (int i = 0; i < ntally; i++) surf2tally[tally2surf[i]] = -1;
+  hash->clear();
   ntally = 0;
+  combined = 0;
 }
 
 /* ----------------------------------------------------------------------
-   tally values for a single particle colliding with surface element isurf
+   tally values for a single particle in icell
+     colliding with surface element isurf, performing reaction (1 to N)
    iorig = particle ip before collision
    ip,jp = particles after collision
    ip = NULL means no particles after collision
@@ -200,12 +212,13 @@ void ComputeSurf::clear()
    jp != NULL means two particles after collision
 ------------------------------------------------------------------------- */
 
-void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig, 
+void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
+                             Particle::OnePart *iorig,
                              Particle::OnePart *ip, Particle::OnePart *jp)
 {
   // skip if isurf not in surface group
 
-  if (dimension == 2) {
+  if (dim == 2) {
     if (!(lines[isurf].mask & groupbit)) return;
   } else {
     if (!(tris[isurf].mask & groupbit)) return;
@@ -218,19 +231,30 @@ void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig,
   if (igroup < 0) return;
 
   // itally = tally index of isurf
-  // if 1st particle hitting isurf, add isurf to tally list
+  // if 1st particle hitting isurf, add surf ID to hash
   // grow tally list if needed
 
+  int itally,transparent;
   double *vec;
 
-  int itally = surf2tally[isurf];
-  if (itally < 0) {
+  surfint surfID;
+  if (dim == 2) {
+    surfID = lines[isurf].id;
+    transparent = lines[isurf].transparent;
+  } else {
+    surfID = tris[isurf].id;
+    transparent = tris[isurf].transparent;
+  }
+
+  if (hash->find(surfID) != hash->end()) itally = (*hash)[surfID];
+  else {
     if (ntally == maxtally) grow_tally();
-    itally = ntally++;
-    tally2surf[itally] = isurf;
-    surf2tally[isurf] = itally;
+    itally = ntally;
+    (*hash)[surfID] = itally;
+    tally2surf[itally] = surfID;
     vec = array_surf_tally[itally];
     for (int i = 0; i < ntotal; i++) vec[i] = 0.0;
+    ntally++;
   }
 
   double fluxscale = normflux[isurf];
@@ -240,13 +264,14 @@ void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig,
   // particle weight used for all keywords except NUM
   // forcescale factor applied for keywords FX,FY,FZ
   // fluxscale factor applied for all keywords except NUM,FX,FY,FZ
+  // if surf is transparent, all flux tallying is for incident particle only
 
   double vsqpre,ivsqpost,jvsqpost;
   double ierot,jerot,ievib,jevib,iother,jother,otherpre,etot;
   double pdelta[3],pnorm[3],ptang[3],pdelta_force[3];
 
   double *norm;
-  if (dimension == 2) norm = lines[isurf].norm;
+  if (dim == 2) norm = lines[isurf].norm;
   else norm = tris[isurf].norm;
 
   double origmass,imass,jmass;
@@ -274,8 +299,10 @@ void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig,
       break;
     case MFLUX:
       vec[k++] += origmass;
-      if (ip) vec[k++] -= imass;
-      if (jp) vec[k++] -= jmass;
+      if (!transparent) {
+        if (ip) vec[k++] -= imass;
+        if (jp) vec[k++] -= jmass;
+      }
       break;
     case FX:
       if (!fflag) {
@@ -379,21 +406,30 @@ void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig,
       else ivsqpost = 0.0;
       if (jp) jvsqpost = jmass * MathExtra::lensq3(jp->v);
       else jvsqpost = 0.0;
-      vec[k++] -= 0.5*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
+      if (transparent)
+        vec[k++] += 0.5*mvv2e * vsqpre * fluxscale;
+      else
+        vec[k++] -= 0.5*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
       break;
     case EROT:
       if (ip) ierot = ip->erot;
       else ierot = 0.0;
       if (jp) jerot = jp->erot;
       else jerot = 0.0;
-      vec[k++] -= weight * (ierot + jerot - iorig->erot) * fluxscale;
+      if (transparent)
+        vec[k++] += weight * iorig->erot * fluxscale;
+      else
+        vec[k++] -= weight * (ierot + jerot - iorig->erot) * fluxscale;
       break;
     case EVIB:
       if (ip) ievib = ip->evib;
       else ievib = 0.0;
       if (jp) jevib = jp->evib;
       else jevib = 0.0;
-      vec[k++] -= weight * (ievib + jevib - iorig->evib) * fluxscale;
+      if (transparent)
+        vec[k++] += weight * iorig->evib * fluxscale;
+      else
+        vec[k++] -= weight * (ievib + jevib - iorig->evib) * fluxscale;
       break;
     case ETOT:
       vsqpre = origmass * MathExtra::lensq3(vorig);
@@ -406,8 +442,11 @@ void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig,
 	jvsqpost = jmass * MathExtra::lensq3(jp->v);
 	jother = jp->erot + jp->evib;
       } else jvsqpost = jother = 0.0;
-      etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) + 
-        weight * (iother + jother - otherpre);
+      if (transparent)
+        etot = -0.5*mvv2e*vsqpre - weight*otherpre;
+      else
+        etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
+          weight * (iother + jother - otherpre);
       vec[k++] -= etot * fluxscale;
       break;
     }
@@ -418,40 +457,51 @@ void ComputeSurf::surf_tally(int isurf, Particle::OnePart *iorig,
    return # of tallies and their indices into my local surf list
 ------------------------------------------------------------------------- */
 
-int ComputeSurf::tallyinfo(int *&ptr)
+int ComputeSurf::tallyinfo(surfint *&ptr)
 {
   ptr = tally2surf;
   return ntally;
 }
 
 /* ----------------------------------------------------------------------
-   sum tally values to per-surf values
-   index = 0 if this compute produces a vector
-   index = 1 to N if this compute produces an array with 1 to N columns
-   regardless, result is stored in vector_surf for Nown surfs this proc owns
+   sum tally values to owning surfs via surf->collate()
 ------------------------------------------------------------------------- */
 
-void ComputeSurf::tallysum(int index)
+void ComputeSurf::post_process_surf()
 {
-  // skip if result has already been computed on this timestep
-  // NOTE: doing this for repeated index would require 
-  //       storing multiple vector_surfs
+  if (combined) return;
+  combined = 1;
 
-  if (update->ntimestep == last_tallysum) return;
-  last_tallysum = update->ntimestep;
+  // reallocate array_surf if necessary
 
-  // allocate vector surf if necessary
+  int nown = surf->nown;
 
-  if (!vector_surf) memory->create(vector_surf,surf->nown,"surf:vector_surf");
+  if (nown > maxsurf) {
+    memory->destroy(array_surf);
+    maxsurf = nown;
+    memory->create(array_surf,maxsurf,ntotal,"surf:array_surf");
+  }
 
-  // array_surf_tally can be NULL if this proc has performed no tallies
+  // zero array_surf
 
+  int i,j;
+  for (i = 0; i < nown; i++)
+    for (j = 0; j < ntotal; j++)
+      array_surf[i][j] = 0.0;
+
+  // collate entire array of results
+
+  surf->collate_array(ntally,ntotal,tally2surf,array_surf_tally,array_surf);
+
+  /*
   if (array_surf_tally)
     surf->collate_vector(ntally,tally2surf,
                          &array_surf_tally[0][index-1],ntotal,vector_surf);
-  else 
+  else
     surf->collate_vector(ntally,tally2surf,NULL,ntotal,vector_surf);
+  */
 }
+
 
 /* ---------------------------------------------------------------------- */
 
@@ -463,6 +513,16 @@ void ComputeSurf::grow_tally()
 }
 
 /* ----------------------------------------------------------------------
+   reset normflux for my surfs
+   called whenever grid changes
+------------------------------------------------------------------------- */
+
+void ComputeSurf::reallocate()
+{
+  init_normflux();
+}
+
+/* ----------------------------------------------------------------------
    memory usage
 ------------------------------------------------------------------------- */
 
@@ -470,7 +530,6 @@ bigint ComputeSurf::memory_usage()
 {
   bigint bytes = 0;
   bytes += ntotal*maxtally * sizeof(double);    // array_surf_tally
-  bytes += maxtally * sizeof(int);              // tally2surf
-  bytes += nsurf * sizeof(int);                 // surf2tally
+  bytes += maxtally * sizeof(surfint);          // tally2surf
   return bytes;
 }

@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -29,15 +29,17 @@ class Cut3d : protected Pointers {
   Cut3d(class SPARTA *);
   ~Cut3d();
   int surf2grid(cellint, double *, double *, surfint *, int);
-  int surf2grid_list(cellint, double *, double *, int, surfint *, 
+  int surf2grid_list(cellint, double *, double *, int, surfint *,
                      surfint *, int);
   int surf2grid_one(double *, double *, double *, double *, double *);
   int split(cellint, double *, double *, int, surfint *,
             double *&, int *, int *, int &, double *);
-  int clip_external(double *, double *, double *, 
+  int clip_external(double *, double *, double *,
                     double *, double *, double *);
 
  private:
+  int implicit;
+
   cellint id;            // ID of cell being worked on
   double *lo,*hi;        // opposite corner pts of cell
   int nsurf;             // # of surf elements in cell
@@ -130,8 +132,9 @@ class Cut3d : protected Pointers {
   void walk();
   int loop2ph();
   void create_surfmap(int *);
-  int split_point(int *, double *, int &);
-  
+  int split_point_explicit(int *, double *, int &);
+  int split_point_implicit(int *, double *, int &);
+
   void edge_insert(int, int, int, int, int, int, int);
   void edge_remove(Edge *);
   void edge_remove(Edge *, int);

@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -32,7 +32,7 @@ class ComputeTvibGrid : public Compute {
   void init();
   void compute_per_grid();
   int query_tally_grid(int, double **&, int *&);
-  double post_process_grid(int, int, int, double **, int *, double *, int);
+  void post_process_grid(int, int, double **, int *, double *, int);
   void reallocate();
   bigint memory_usage();
 
@@ -69,7 +69,7 @@ class ComputeTvibGrid : public Compute {
 
   double **tspecies_mode;    // per-species per-mode vibrational temps
                              // size = Nspecies by Nmode
-  int **s2t_mode;            // s2tmode[i][j] = 
+  int **s2t_mode;            // s2tmode[i][j] =
                              //   first tally column for species I, mode J
                              // length = Nspecies by Nmode
   int *t2s_mode;             // t2s_mode[i] = species index for Ith tally column

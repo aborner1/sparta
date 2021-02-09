@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -18,6 +18,7 @@
 #include "surf.h"
 #include "domain.h"
 #include "grid.h"
+#include "comm.h"
 #include "math_extra.h"
 #include "math_const.h"
 #include "error.h"
@@ -31,6 +32,8 @@ enum{ENTRY,EXIT,TWO,CORNER};              // same as Cut3d
 
 #define EPSCELL 1.0e-10    // tolerance for pushing surf pts to cell surface
 
+#define EPSCLOSE 1.0e-9    // tolerance for pushing surf clip pts to cell surface
+
 // cell ID for 2d or 3d cell
 
 //#define VERBOSE
@@ -42,6 +45,7 @@ enum{ENTRY,EXIT,TWO,CORNER};              // same as Cut3d
 Cut2d::Cut2d(SPARTA *sparta, int caller_axisymmetric) : Pointers(sparta)
 {
   axisymmetric = caller_axisymmetric;
+  implicit = surf->implicit;
 
   npushmax = 2;    // if increase this, increase push vec size in cut2d.h
 
@@ -70,7 +74,7 @@ Cut2d::Cut2d(SPARTA *sparta, int caller_axisymmetric) : Pointers(sparta)
    return -1 if nsurf > max
 ------------------------------------------------------------------------- */
 
-int Cut2d::surf2grid(cellint id_caller, double *lo_caller, double *hi_caller, 
+int Cut2d::surf2grid(cellint id_caller, double *lo_caller, double *hi_caller,
                      surfint *surfs_caller, int max)
 {
   id = id_caller;
@@ -111,7 +115,7 @@ int Cut2d::surf2grid(cellint id_caller, double *lo_caller, double *hi_caller,
    called by AdaptGrid via Grid::surf2grid_one
 ------------------------------------------------------------------------- */
 
-int Cut2d::surf2grid_list(cellint id_caller, 
+int Cut2d::surf2grid_list(cellint id_caller,
                           double *lo_caller, double *hi_caller,
                           int nlist, surfint *list,
                           surfint *surfs_caller, int max)
@@ -154,7 +158,7 @@ int Cut2d::surf2grid_list(cellint id_caller,
    called by Grid::surf2grid2
 ------------------------------------------------------------------------- */
 
-int Cut2d::surf2grid_one(double *p, double *q, 
+int Cut2d::surf2grid_one(double *p, double *q,
                          double *lo_caller, double *hi_caller)
 {
   lo = lo_caller;
@@ -217,7 +221,7 @@ int Cut2d::cliptest(double *p, double *q)
       b[0] = x; b[1] = hi[1];
     }
   }
-     
+
   return 1;
 }
 
@@ -230,7 +234,7 @@ int Cut2d::cliptest(double *p, double *q)
    duplicate points in cpath are deleted
 ------------------------------------------------------------------------- */
 
-int Cut2d::clip_external(double *p, double *q, double *clo, double *chi, 
+int Cut2d::clip_external(double *p, double *q, double *clo, double *chi,
                          double *cpath)
 {
   double x,y;
@@ -313,9 +317,9 @@ int Cut2d::clip_external(double *p, double *q, double *clo, double *chi,
      xsplit = coords of a point in the split cell
 ------------------------------------------------------------------------- */
 
-int Cut2d::split(cellint id_caller, double *lo_caller, double *hi_caller, 
+int Cut2d::split(cellint id_caller, double *lo_caller, double *hi_caller,
                  int nsurf_caller, surfint *surfs_caller,
-                 double *&areas_caller, int *surfmap, 
+                 double *&areas_caller, int *surfmap,
                  int *corners, int &xsub, double *xsplit)
 {
   id = id_caller;
@@ -376,11 +380,12 @@ int Cut2d::split(cellint id_caller, double *lo_caller, double *hi_caller,
       if (push_increment()) continue;
       break;
     }
-  
+
     nsplit = pgs.n;
     if (nsplit > 1) {
       create_surfmap(surfmap);
-      errflag = split_point(surfmap,xsplit,xsub);
+      if (implicit) errflag = split_point_implicit(surfmap,xsplit,xsub);
+      else errflag = split_point_explicit(surfmap,xsplit,xsub);
     }
     if (errflag) {
       if (push_increment()) continue;
@@ -394,7 +399,7 @@ int Cut2d::split(cellint id_caller, double *lo_caller, double *hi_caller,
     corners[0] = corners[1] = corners[2] = corners[3] = INSIDE;
 
     int iloop,nloop,mloop,ipt,npt,mpt;
-    
+
     int npg = pgs.n;
     for (int ipg = 0; ipg < npg; ipg++) {
       nloop = pgs[ipg].n;
@@ -440,7 +445,7 @@ int Cut2d::split(cellint id_caller, double *lo_caller, double *hi_caller,
       error->one(FLERR,"LP: More than one positive area with a negative area");
     if (errflag == 6)
       error->one(FLERR,"LP: Single area is negative, inverse donut");
-    if (errflag == 7) 
+    if (errflag == 7)
       error->one(FLERR,"SP: Could not find split point in split cell");
   }
 
@@ -451,7 +456,7 @@ int Cut2d::split(cellint id_caller, double *lo_caller, double *hi_caller,
 
 /* ----------------------------------------------------------------------
    return errflag to Cut3d caller
-     incremented by 20 so Cut3d can distinguish from its own error messages
+   incremented by 20 so Cut3d can distinguish from its own error messages
 ------------------------------------------------------------------------- */
 
 int Cut2d::split_face(int id_caller, int, double *onelo, double *onehi)
@@ -495,15 +500,19 @@ int Cut2d::split_face(int id_caller, int, double *onelo, double *onehi)
 
 /* ----------------------------------------------------------------------
    create clines = list of lines clipped to cell
+   skip transparent surfs
 ------------------------------------------------------------------------- */
 
 int Cut2d::build_clines()
 {
-  int m;
+  int j,m;
   double p1[2],p2[2],cbox[3],cmid[3],l2b[3];
-  double *x,*y,*norm,*pp1,*pp2;
+  double *x,*y,*norm,*pp1,*pp2,*p;
   Surf::Line *line;
   Cline *cline;
+
+  double xdelta = EPSCLOSE * (hi[0]-lo[0]);
+  double ydelta = EPSCLOSE * (hi[1]-lo[1]);
 
   Surf::Line *lines = surf->lines;
 
@@ -518,16 +527,30 @@ int Cut2d::build_clines()
   for (int i = 0; i < nsurf; i++) {
     m = surfs[i];
     line = &lines[m];
+    if (line->transparent) continue;
     memcpy(p1,line->p1,2*sizeof(double));
     memcpy(p2,line->p2,2*sizeof(double));
 
     // if pushflag is set, push line pts near cell surface
 
+    /*
     if (pushflag) {
       push(p1);
       push(p2);
     }
+    */
 
+    // push all line points within EPSCLOSE of cell face to cell face
+
+    for (j = 0; j < 2; j++) {
+      if (j == 0) p = p1;
+      else p = p2;
+      if (fabs(p[0]-lo[0]) < xdelta) p[0] = lo[0];
+      if (fabs(p[0]-hi[0]) < xdelta) p[0] = hi[0];
+      if (fabs(p[1]-lo[1]) < ydelta) p[1] = lo[1];
+      if (fabs(p[1]-hi[1]) < ydelta) p[1] = hi[1];
+    }
+    
     cline = &clines[n];
     cline->line = i;
 
@@ -541,7 +564,7 @@ int Cut2d::build_clines()
     // if all lines are removed, clines will be empty,
     //   which will result in cell corner pts being left UNKNOWN in split()
     // to try and avoid this, tally the in/out orientation of all removed lines
-    // "out" orientation means line norm from line ctr points towards cell ctr 
+    // "out" orientation means line norm from line ctr points towards cell ctr
     // "in" orientation means line norm from line ctr points away from cell ctr
     // some lines may not follow this rule, but majority should
     // cbox = cell center pt, cmid = line center pt, l2b = cbox-cmid
@@ -559,27 +582,23 @@ int Cut2d::build_clines()
       double dot = MathExtra::dot3(line->norm,l2b);
       if (dot > 0.0) noutside++;
       if (dot < 0.0) ninside++;
-
       continue;
     }
-    
-    // discard clipped line if lies along one cell edge
-    //   and normal is not into cell
-    // leave grazeflag incremented in this case
 
-    grazeflag++;
+    // discard a line which only grazes the cell
+    // grazing = both line pts are on same edge of cell and outward normal
+    // grazeflag = 1 if any line grazes the cell
+
     if (ptflag(x) == BORDER && ptflag(y) == BORDER) {
       int edge = sameedge(x,y);
-      if (edge) {
-        norm = line->norm;
-        if (edge == 1 and norm[0] < 0.0) continue;
-        if (edge == 2 and norm[0] > 0.0) continue;
-        if (edge == 3 and norm[1] < 0.0) continue;
-        if (edge == 4 and norm[1] > 0.0) continue;
-        grazeflag--;
+      if (edge && grazing(edge,line->norm)) {
+	grazeflag = 1;
+	continue;
       }
     }
 
+    // line is added to clines
+    
     n++;
   }
 
@@ -861,7 +880,7 @@ void Cut2d::weiler_loops()
   //   loop of just 4 corner pts is a valid loop
   // stop when reach used pt:
   //   discard loop, just traversed non-loop corner pts
-
+ 
   int ipt,iflag,cflag,ncount,firstpt,nextpt;
   double area;
   double *x,*y;
@@ -892,7 +911,7 @@ void Cut2d::weiler_loops()
       if (ipt == firstpt) break;
     }
     if (ipt != firstpt) continue;
-    
+
     loops.grow(nloop+1);
     loops[nloop].area = area;
     loops[nloop].active = 1;
@@ -908,6 +927,8 @@ void Cut2d::weiler_loops()
 }
 
 /* ----------------------------------------------------------------------
+   ok to have a loop with area = 0.0
+   can happen if a line crosses cell extremely close to corner point
 ------------------------------------------------------------------------- */
 
 int Cut2d::loop2pg()
@@ -917,7 +938,7 @@ int Cut2d::loop2pg()
 
   int nloop = loops.n;
   for (int i = 0; i < nloop; i++)
-    if (loops[i].area > 0.0) positive++;
+    if (loops[i].area >= 0.0) positive++;
     else negative++;
   if (positive == 0) return 4;
   if (positive > 1 && negative) return 5;
@@ -1008,9 +1029,14 @@ void Cut2d::create_surfmap(int *surfmap)
 }
 
 /* ----------------------------------------------------------------------
+   find a surf point that is inside or on the boundary of the current cell
+   for explicit surfs and cells already been flagged as a split cell
+   surfmap = sub-cell index each surf is part of (-1 if not eligible)
+   return xsplit = coords of point
+   return xsub = sub-cell index the chosen surf is in
 ------------------------------------------------------------------------- */
 
-int Cut2d::split_point(int *surfmap, double *xsplit, int &xsub)
+int Cut2d::split_point_explicit(int *surfmap, double *xsplit, int &xsub)
 {
   int iline;
   double *x1,*x2;
@@ -1053,6 +1079,35 @@ int Cut2d::split_point(int *surfmap, double *xsplit, int &xsub)
   // error return
 
   return 7;
+}
+
+/* ----------------------------------------------------------------------
+   find a surf point that is inside or on the boundary of the current cell
+   for implicit surfs and cells already flagged as a split cell
+   surfmap = sub-cell index each surf is part of (-1 if not eligible)
+   return xsplit = coords of point
+   return xsub = sub-cell index the chosen surf is in
+------------------------------------------------------------------------- */
+
+int Cut2d::split_point_implicit(int *surfmap, double *xsplit, int &xsub)
+{
+  Surf::Line *lines = surf->lines;
+
+  // i = 1st surf with non-negative surfmap
+
+  int i = 0;
+  while (surfmap[i] < 0 && i < nsurf) i++;
+  if (i == nsurf) return 7;
+
+  // xsplit = center point of line segment wholly contained in cell
+
+  int iline = surfs[i];
+  xsplit[0] = 0.5 * (lines[iline].p1[0] + lines[iline].p2[0]);
+  xsplit[1] = 0.5 * (lines[iline].p1[1] + lines[iline].p2[1]);
+  xsplit[2] = 0.0;
+  xsub = surfmap[i];
+
+  return 0;
 }
 
 /* ----------------------------------------------------------------------
@@ -1127,7 +1182,7 @@ int Cut2d::ptflag(double *pt)
 ------------------------------------------------------------------------- */
 
 int Cut2d::push_increment()
-{  
+{
   if (pushflag == npushmax) return 0;
   pushlo = pushlo_vec[pushflag];
   pushhi = pushhi_vec[pushflag];;
@@ -1151,7 +1206,7 @@ void Cut2d::push(double *pt)
   double epsx = EPSCELL * (hi[0]-lo[0]);
   double epsy = EPSCELL * (hi[1]-lo[1]);
 
-  //if (x < lo[0]-pushhi*epsx || x > hi[0]+pushhi*epsx || 
+  //if (x < lo[0]-pushhi*epsx || x > hi[0]+pushhi*epsx ||
   //    y < lo[1]-pushhi*epsy || y > hi[1]+pushhi*epsy) return;
 
   if (x > lo[0]-pushhi*epsx && x < lo[0]-pushlo*epsx) x = lo[0]-pushvalue*epsx;
@@ -1188,6 +1243,22 @@ int Cut2d::sameedge(double *a, double *b)
 }
 
 /* ----------------------------------------------------------------------
+   a line is grazing if both its points are on any edge of cell
+   and its normal is outward with respect to cell
+   edge = 1,2,3,4 for both points on left,right,lower,upper cell face
+   return 1 if grazing else 0
+------------------------------------------------------------------------- */
+
+int Cut2d::grazing(int edge, double *norm)
+{
+  if (edge == 1 && norm[0] < 0.0) return 1;
+  if (edge == 2 && norm[0] > 0.0) return 1;
+  if (edge == 3 && norm[1] < 0.0) return 1;
+  if (edge == 4 && norm[1] > 0.0) return 1;
+  return 0;
+}
+
+/* ----------------------------------------------------------------------
    check which side of cell pt is on, assumed to be on border
    not called for corner pt, but return either side
    return 0,1,2,3 = lower,right,upper,left if on border, -1 if not
@@ -1208,34 +1279,13 @@ int Cut2d::whichside(double *pt)
 
 void Cut2d::failed_cell()
 {
-  printf("Cut2d failed in cell ID: " CELLINT_FORMAT "\n",id);
-
-  cellint ichild;
-  int iparent = grid->id_find_parent(id,ichild);
-  while (iparent >= 0) {
-    int nx = grid->pcells[iparent].nx;
-    int ny = grid->pcells[iparent].ny;
-    int ix = (ichild-1) % nx;
-    int iy = ((ichild-1)/nx) % ny;
-    int iz = (ichild-1) / (nx*ny);
-    printf("  parent " CELLINT_FORMAT " level %d: NxNyNz %d %d %d: "
-           "child " CELLINT_FORMAT " %d %d %d\n",
-           grid->pcells[iparent].id,
-           grid->pcells[iparent].level,
-           grid->pcells[iparent].nx,
-           grid->pcells[iparent].ny,
-           grid->pcells[iparent].nz,
-           ichild,ix,iy,iz);
-    if (iparent == 0) break;
-    iparent = grid->id_find_parent(grid->pcells[iparent].id,ichild);
-  }
-
+  printf("Cut2d failed on proc %d in cell ID: " CELLINT_FORMAT "\n",comm->me,id);
   printf("  lo corner %g %g\n",lo[0],lo[1]);
   printf("  hi corner %g %g\n",hi[0],hi[1]);
   printf("  # of surfs = %d out of " BIGINT_FORMAT "\n",nsurf,surf->nsurf);
-  printf("  # of surfs = %d\n",nsurf);
+  Surf::Line *lines = surf->lines;
   printf("  surfs:");
-  for (int i = 0; i < nsurf; i++) printf(" %d",surfs[i]);
+  for (int i = 0; i < nsurf; i++) printf(" %d",lines[surfs[i]].id);
   printf("\n");
 }
 

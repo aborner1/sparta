@@ -7,7 +7,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -29,7 +29,6 @@ class Surf : protected Pointers {
   int implicit;             // 1 = implicit surfs, 0 = explicit surfs
   int distributed;          // 1 = surfs spread across procs (exp or impl)
                             // 0 = each proc owns all
-  //int dynamic;              // 1 = implicit surfs change, 0 = static
   int surf_collision_check; // flag for whether init() check is required
                             // for assign of collision models to surfs
 
@@ -66,6 +65,7 @@ class Surf : protected Pointers {
     double p1[3],p2[3];     // end points of line segment
                             // rhand rule: Z x (p2-p1) = outward normal
     double norm[3];         // outward normal to line segment
+    int transparent;        // 1 if surf is transparent
   };
 
   struct Tri {
@@ -77,18 +77,19 @@ class Surf : protected Pointers {
     double p1[3],p2[3],p3[3];  // corner points of triangle
                             // rhand rule: (p2-p1) x (p3-p1) = outward normal
     double norm[3];         // outward normal to triangle
+    int transparent;        // 1 if surf is transparent
   };
 
   Line *lines;              // list of lines for surface collisions
   Tri *tris;                // list of tris for surface collisions
   int nlocal;               // # of lines or tris
                             // explicit, all: nlocal = nsurf
-                            // explicit, distributed: 
+                            // explicit, distributed:
                             //   surfs which overlap my owned grid cells
                             // implicit: surfs within my owned grid cells
   int nghost;               // # of ghost surfs I store for collisions
                             // explicit, all: nghost = 0
-                            // explicit, distributed: 
+                            // explicit, distributed:
                             //   surfs which overlap my ghost grid cells
                             // implicit: surfs within my ghost grid cells
   int nmax;                 // max length of lines/tris vecs
@@ -99,6 +100,11 @@ class Surf : protected Pointers {
                             //   only for explicit, distributed
   int nown;                 // # of lines or tris I own uniquely
   int maxown;               // max length of owned lines/tris vecs
+
+  Line *tmplines;           // list of temporary lines, filled by ReadSurf
+  Tri *tmptris;             // list of temporary tris, filled by ReadSurf
+  int ntmp;                 // # of temporary surfs
+  int nmaxtmp;              // max size of tmplines/tmptris
 
   int nsc,nsr;              // # of surface collision and reaction models
   class SurfCollide **sc;   // list of surface collision models
@@ -116,12 +122,14 @@ class Surf : protected Pointers {
   typedef std::map<OnePoint2d,int>::iterator MyPointIt;
   typedef std::map<TwoPoint3d,int> MyHash2Point;
   typedef std::map<TwoPoint3d,int>::iterator My2PointIt;
+  typedef std::map<cellint,int> MyCellHash;
 #elif defined SPARTA_UNORDERED_MAP
   typedef std::unordered_map<surfint,int> MySurfHash;
   typedef std::unordered_map<OnePoint2d,int,OnePoint2dHash> MyHashPoint;
   typedef std::unordered_map<OnePoint2d,int,OnePoint2dHash>::iterator MyPointIt;
   typedef std::unordered_map<TwoPoint3d,int,TwoPoint3dHash> MyHash2Point;
   typedef std::unordered_map<TwoPoint3d,int,TwoPoint3dHash>::iterator My2PointIt;
+  typedef std::unordered_map<cellint,int> MyCellHash;
 #else
   typedef std::tr1::unordered_map<surfint,int> MySurfHash;
   typedef std::tr1::unordered_map<OnePoint2d,int,OnePoint2dHash> MyHashPoint;
@@ -130,6 +138,7 @@ class Surf : protected Pointers {
   typedef std::tr1::unordered_map<TwoPoint3d,int,TwoPoint3dHash> MyHash2Point;
   typedef std::tr1::unordered_map<TwoPoint3d,int,TwoPoint3dHash>::
     iterator My2PointIt;
+  typedef std::tr1::unordered_map<cellint,int> MyCellHash;
 #endif
 
   MySurfHash *hash;           // hash for nlocal surf IDs
@@ -140,16 +149,23 @@ class Surf : protected Pointers {
   void global(char *);
   void modify_params(int, char **);
   void init();
+  void clear();
   void remove_ghosts();
-  void add_line(int, double *, double *);
+  void add_line(surfint, int, double *, double *);
   void add_line_copy(int, Line *);
-  void add_line_own(int, double *, double *);
-  void add_tri(int, double *, double *, double *);
+  void add_line_own(surfint, int, double *, double *);
+  void add_line_temporary(surfint, int, double *, double *);
+  void add_tri(surfint, int, double *, double *, double *);
   void add_tri_copy(int, Tri *);
-  void add_tri_own(int, double *, double *, double *);
+  void add_tri_own(surfint, int, double *, double *, double *);
+  void add_tri_own_clip(surfint, int, double *, double *, double *);
+  void add_tri_temporary(surfint, int, double *, double *, double *);
   void rehash();
+  int all_transparent();
+
   void setup_owned();
-  void setup_bbox();
+  void bbox_all();
+  void bbox_one(void *, double *, double *);
 
   void compute_line_normal(int);
   void compute_tri_normal(int);
@@ -183,29 +199,38 @@ class Surf : protected Pointers {
   void group(int, char **);
   int add_group(const char *);
   int find_group(const char *);
-  
-  void compress_rebalance();
-  void reset_csurfs_implicit();
 
-  void collate_vector(int, int *, double *, int, double *);
-  void collate_vector_reduce(int, int *, double *, int, double *);
-  void collate_vector_rendezvous(int, int *, double *, int, double *);
+  void compress_explicit();
+  void compress_implicit();
 
-  void collate_array(int, int, int *, double **, double **);
-  void collate_array_reduce(int, int, int *, double **, double **);
-  void collate_array_rendezvous(int, int, int *, double **, double **);
+  void collate_vector(int, surfint *, double *, int, double *);
+  void collate_vector_reduce(int, surfint *, double *, int, double *);
+  void collate_vector_rendezvous(int, surfint *, double *, int, double *);
+
+  void collate_array(int, int, surfint *, double **, double **);
+  void collate_array_reduce(int, int, surfint *, double **, double **);
+  void collate_array_rendezvous(int, int, surfint *, double **, double **);
+  void collate_vector_implicit(int, surfint *, double *, double *);
+  void collate_array_implicit(int, int, surfint *, double **, double **);
+
+  void redistribute_lines_clip(int, int);
+  void redistribute_lines_temporary(int);
+  void redistribute_tris_clip(int, int);
+  void redistribute_tris_temporary(int);
 
   void write_restart(FILE *);
   void read_restart(FILE *);
-  virtual void grow();
-  virtual void grow_own();
+  virtual void grow(int);
+  virtual void grow_own(int);
+  virtual void grow_temporary(int);
   bigint memory_usage();
 
  protected:
+  int me,nprocs;
   int maxsc;                // max # of models in sc
   int maxsr;                // max # of models in sr
-  
-  // collate rendezvous data
+
+  // collate vector rendezvous data
 
   struct InRvousVec {
     surfint id;             // surface ID
@@ -247,7 +272,7 @@ class Surf : protected Pointers {
   };
 
   // private methods
-  
+
   void point_line_compare(double *, double *, double *, double, int &, int &);
   void point_tri_compare(double *, double *, double *, double *, double *,
                          double, int &, int &, int, int, int);
@@ -263,13 +288,18 @@ class Surf : protected Pointers {
   void check_watertight_3d_distributed();
 
   // callback functions for rendezvous communication
- 
+
   static int rendezvous_vector(int, char *, int &, int *&, char *&, void *);
   static int rendezvous_array(int, char *, int &, int *&, char *&, void *);
-  static int rendezvous_watertight_2d(int, char *, 
+  static int rendezvous_implicit(int, char *, int &, int *&, char *&, void *);
+  static int rendezvous_watertight_2d(int, char *,
                                       int &, int *&, char *&, void *);
-  static int rendezvous_watertight_3d(int, char *, 
+  static int rendezvous_watertight_3d(int, char *,
                                       int &, int *&, char *&, void *);
+  static int rendezvous_lines(int, char *,
+                              int &, int *&, char *&, void *);
+  static int rendezvous_tris(int, char *,
+                             int &, int *&, char *&, void *);
 };
 
 }

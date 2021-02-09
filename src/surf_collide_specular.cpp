@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -28,6 +28,8 @@ SurfCollideSpecular::SurfCollideSpecular(SPARTA *sparta, int narg, char **arg) :
   SurfCollide(sparta, narg, arg)
 {
   if (narg != 2) error->all(FLERR,"Illegal surf_collide specular command");
+
+  allowreact = 1;
 }
 
 /* ----------------------------------------------------------------------
@@ -37,20 +39,21 @@ SurfCollideSpecular::SurfCollideSpecular(SPARTA *sparta, int narg, char **arg) :
    isr = index of reaction model if >= 0, -1 for no chemistry
    ip = set to NULL if destroyed by chemsitry
    return jp = new particle if created by chemistry
+   return reaction = index of reaction (1 to N) that took place, 0 = no reaction
    resets particle(s) to post-collision outward velocity
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollideSpecular::
-collide(Particle::OnePart *&ip, double *norm, double &, int isr, int isurf)
+collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction, int isurf)
 {
   nsingle++;
 
   // if surface chemistry defined, attempt reaction
-  // reaction = 1 if reaction took place
+  // reaction > 0 if reaction took place
 
   Particle::OnePart iorig;
   Particle::OnePart *jp = NULL;
-  int reaction = 0;
+  reaction = 0;
 
   if (isr >= 0) {
     if (modify->n_surf_react) memcpy(&iorig,ip,sizeof(Particle::OnePart));
@@ -79,6 +82,6 @@ collide(Particle::OnePart *&ip, double *norm, double &, int isr, int isurf)
       particle->nlocal--;
     }
   }
-    
+
   return jp;
 }

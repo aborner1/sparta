@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -60,7 +60,7 @@ class Fix : protected Pointers {
 
   int START_OF_STEP,END_OF_STEP;    // mask settings
 
-  int kokkos_flag;                // 0/1 if Kokkos fix
+  int kokkos_flag;              // 0/1 if Kokkos fix
   int copymode;                 // 1 if copy of class (prevents deallocation of
                                 //  base class when child copy is destroyed)
   ExecutionSpace execution_space;
@@ -80,11 +80,12 @@ class Fix : protected Pointers {
   virtual void gas_react(int) {}
   virtual void surf_react(Particle::OnePart *, int &, int &) {}
 
-  virtual void add_grid_one(int, int) {}
   virtual int pack_grid_one(int, char *, int) {return 0;}
   virtual int unpack_grid_one(int, char *) {return 0;}
-  virtual void compress_grid() {}
-  virtual void post_compress_grid() {}
+  virtual void copy_grid_one(int, int) {}
+  virtual void add_grid_one() {}
+  virtual void reset_grid_count(int) {}
+  virtual void grid_changed() {}
 
   virtual double compute_scalar() {return 0.0;}
   virtual double compute_vector(int) {return 0.0;}

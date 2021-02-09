@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -43,7 +43,7 @@ class Cut2d : protected Pointers {
                         //   though may not be walked
     int line;           // original line (as stored by Cline) the pt starts,
                         //   only set for ENTRY and TWO pts
-    int corner;         // 1,2,3,4 if x is a corner point, else 0
+    int corner;         // 0,1,2,3 if x is a corner point, else -1
                         // could be ENTRY,EXIT,CORNER pt, but not a TWO pt
     int cprev,cnext;    // indices of pts in linked list around cell perimeter
     int side;           // which side of cell (0,1,2,3) pt is on
@@ -75,7 +75,7 @@ class Cut2d : protected Pointers {
   Cut2d(class SPARTA *, int);
   ~Cut2d() {}
   int surf2grid(cellint, double *, double *, surfint *, int);
-  int surf2grid_list(cellint, double *, double *, int, surfint *, 
+  int surf2grid_list(cellint, double *, double *, int, surfint *,
                      surfint *, int);
   int surf2grid_one(double *, double *, double *, double *);
   int split(cellint, double *, double *, int, surfint *,
@@ -85,6 +85,8 @@ class Cut2d : protected Pointers {
 
  private:
   int axisymmetric;
+  int implicit;
+
   cellint id;            // ID of cell being worked on
   double *lo,*hi;        // opposite corner pts of cell
   int nsurf;             // # of surf elements in cell
@@ -104,7 +106,8 @@ class Cut2d : protected Pointers {
   void weiler_loops();
   int loop2pg();
   void create_surfmap(int *);
-  int split_point(int *, double *, int &);
+  int split_point_explicit(int *, double *, int &);
+  int split_point_implicit(int *, double *, int &);
 
   int cliptest(double *, double *);
   void clip(double *, double *, double *, double *);
@@ -113,6 +116,7 @@ class Cut2d : protected Pointers {
   int push_increment();
   void push(double *);
   int sameedge(double *, double *);
+  int grazing(int, double *);
   int whichside(double *);
 
   void failed_cell();

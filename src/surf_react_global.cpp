@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -35,7 +35,15 @@ SurfReactGlobal::SurfReactGlobal(SPARTA *sparta, int narg, char **arg) :
   prob_create = input->numeric(FLERR,arg[3]);
 
   if (prob_destroy + prob_create > 1.0)
-    error->all(FLERR,"Illegal surf_react gkibak command");
+    error->all(FLERR,"Illegal surf_react global command");
+
+  nlist = 2;
+  tally_single = new int[nlist];
+  tally_total = new int[nlist];
+  tally_single_all = new int[nlist];
+  tally_total_all = new int[nlist];
+
+  size_vector = 2 + 2*nlist;
 
   // initialize RNG
 
@@ -51,9 +59,15 @@ SurfReactGlobal::~SurfReactGlobal()
   delete random;
 }
 
-/* ---------------------------------------------------------------------- */
+/* ----------------------------------------------------------------------
+   select surface reaction to perform for particle with ptr IP on surface
+   return 0 if no reaction
+   return 1 = destroy reaction
+   return 2 = create reaction
+   if create, add particle and return ptr JP
+------------------------------------------------------------------------- */
 
-int SurfReactGlobal::react(Particle::OnePart *&ip, double *, 
+int SurfReactGlobal::react(Particle::OnePart *&ip, double *,
                            Particle::OnePart *&jp)
 {
   double r = random->uniform();
@@ -62,6 +76,7 @@ int SurfReactGlobal::react(Particle::OnePart *&ip, double *,
 
   if (r < prob_destroy) {
     nsingle++;
+    tally_single[0]++;
     ip = NULL;
     return 1;
   }
@@ -75,19 +90,29 @@ int SurfReactGlobal::react(Particle::OnePart *&ip, double *,
 
   if (r < prob_destroy+prob_create) {
     nsingle++;
+    tally_single[1]++;
     double x[3],v[3];
     int id = MAXSMALLINT*random->uniform();
     memcpy(x,ip->x,3*sizeof(double));
-    memcpy(v,ip->v,3*sizeof(double));  
+    memcpy(v,ip->v,3*sizeof(double));
     Particle::OnePart *particles = particle->particles;
-    int reallocflag = 
+    int reallocflag =
       particle->add_particle(id,ip->ispecies,ip->icell,x,v,0.0,0.0);
     if (reallocflag) ip = particle->particles + (ip - particles);
     jp = &particle->particles[particle->nlocal-1];
-    return 1;
+    return 2;
   }
 
   // no reaction
 
   return 0;
 }
+
+/* ---------------------------------------------------------------------- */
+
+char *SurfReactGlobal::reactionID(int m)
+{
+  if (m == 0) return (char *) "delete";
+  return (char *) "create";
+}
+

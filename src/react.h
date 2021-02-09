@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -23,6 +23,7 @@ namespace SPARTA_NS {
 class React : protected Pointers {
  public:
   char *style;
+  int nlist;                 // # of reactions read from file
 
   int recombflag;            // 1 if any recombination reactions defined
   int recombflag_user;       // 0 if user has turned off recomb reactions
@@ -41,8 +42,10 @@ class React : protected Pointers {
   virtual void init() {}
   virtual int recomb_exist(int, int) = 0;
   virtual void ambi_check() = 0;
-  virtual int attempt(Particle::OnePart *, Particle::OnePart *, 
+  virtual int attempt(Particle::OnePart *, Particle::OnePart *,
                       double, double, double, double &, int &) = 0;
+  virtual char *reactionID(int) = 0;
+  virtual double extract_tally(int) = 0;
 
   void modify_params(int, char **);
   RanPark* get_random() { return random; }

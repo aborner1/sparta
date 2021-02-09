@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -56,7 +56,7 @@ ComputeGrid::ComputeGrid(SPARTA *sparta, int narg, char **arg) :
 
   nvalue = narg - 4;
   value = new int[nvalue];
-  
+
   npergroup = cellmass = cellcount = 0;
   unique = new int[LASTSIZE];
   nmap = new int[nvalue];
@@ -315,9 +315,8 @@ int ComputeGrid::query_tally_grid(int index, double **&array, int *&cols)
    index = which column of output (0 for vec, 1 to N for array)
    for etally = NULL:
      use internal tallied info for single timestep, set nsample = 1
-     if onecell = -1, compute values for all grid cells
+     compute values for all grid cells
        store results in vector_grid with nstride = 1 (single col of array_grid)
-     if onecell >= 0, compute single value for onecell and return it
    for etally = ptr to caller array:
      use external tallied info for many timesteps
      nsample = additional normalization factor used by some values
@@ -326,13 +325,13 @@ int ComputeGrid::query_tally_grid(int index, double **&array, int *&cols)
    if norm = 0.0, set result to 0.0 directly so do not divide by 0.0
 ------------------------------------------------------------------------- */
 
-double ComputeGrid::post_process_grid(int index, int onecell, int nsample,
-                                      double **etally, int *emap,
-                                      double *vec, int nstride)
+void ComputeGrid::post_process_grid(int index, int nsample,
+                                    double **etally, int *emap,
+                                    double *vec, int nstride)
 {
   index--;
   int ivalue = index % nvalue;
-  
+
   int lo = 0;
   int hi = nglocal;
   int k = 0;
@@ -343,11 +342,6 @@ double ComputeGrid::post_process_grid(int index, int onecell, int nsample,
     emap = map[index];
     vec = vector_grid;
     nstride = 1;
-    if (onecell >= 0) {
-      lo = onecell;
-      hi = lo + 1;
-      k = lo;
-    }
   }
 
   // compute normalized final value for each grid cell
@@ -552,9 +546,6 @@ double ComputeGrid::post_process_grid(int index, int onecell, int nsample,
       break;
     }
   }
-
-  if (onecell < 0) return 0.0;
-  return vec[onecell];
 }
 
 /* ----------------------------------------------------------------------

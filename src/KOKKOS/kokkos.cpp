@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -67,22 +67,36 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
       }
       iarg += 2;
 
+      int set_flag = 0;
       char *str;
       if ((str = getenv("SLURM_LOCALID"))) {
         int local_rank = atoi(str);
         device = local_rank % ngpus;
         if (device >= skip_gpu) device++;
+        set_flag = 1;
+      }
+      if ((str = getenv("MPT_LRANK"))) {
+        int local_rank = atoi(str);
+        device = local_rank % ngpus;
+        if (device >= skip_gpu) device++;
+        set_flag = 1;
       }
       if ((str = getenv("MV2_COMM_WORLD_LOCAL_RANK"))) {
         int local_rank = atoi(str);
         device = local_rank % ngpus;
         if (device >= skip_gpu) device++;
+        set_flag = 1;
       }
       if ((str = getenv("OMPI_COMM_WORLD_LOCAL_RANK"))) {
         int local_rank = atoi(str);
         device = local_rank % ngpus;
         if (device >= skip_gpu) device++;
+        set_flag = 1;
       }
+
+      if (ngpus > 1 && !set_flag)
+        error->all(FLERR,"Could not determine local MPI rank for multiple "
+                           "GPUs with Kokkos CUDA because MPI library not recognized");
 
     } else if (strcmp(arg[iarg],"t") == 0 ||
                strcmp(arg[iarg],"threads") == 0) {
@@ -113,7 +127,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 #endif
 
 #ifndef KOKKOS_ENABLE_SERIAL
-  if (nthreads == 1)
+  if (nthreads == 1 && me == 0)
     error->warning(FLERR,"When using a single thread, the Kokkos Serial backend "
                          "(i.e. Makefile.kokkos_mpi_only) gives better performance "
                          "than the OpenMP backend");

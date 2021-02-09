@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -32,7 +32,9 @@ SurfCollidePiston::SurfCollidePiston(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg != 3) error->all(FLERR,"Illegal surf_collide piston command");
 
-  vwall = input->numeric(FLERR,arg[2]); 
+  allowreact = 1;
+
+  vwall = input->numeric(FLERR,arg[2]);
   if (vwall <= 0.0) error->all(FLERR,"Surf_collide piston velocity <= 0.0");
 }
 
@@ -59,7 +61,7 @@ void SurfCollidePiston::init()
     for (int i = 0; i < nsurf; i++)
       if (lines[i].isc == index) {
         if (lines[i].norm[0] != 0.0 && lines[i].norm[1] != 0.0) flag++;
-      } 
+      }
   }
 
   if (domain->dimension == 3) {
@@ -71,7 +73,7 @@ void SurfCollidePiston::init()
         if (tris[i].norm[1] != 0.0 && tris[i].norm[2] != 0.0) flag++;
         if (tris[i].norm[2] != 0.0 && tris[i].norm[0] != 0.0) flag++;
       }
-  } 
+  }
 
   if (flag) error->all(FLERR,"Surf_collide piston assigned to "
                        "surface with non axis-aligned normal");
@@ -84,20 +86,22 @@ void SurfCollidePiston::init()
    isr = index of reaction model if >= 0, -1 for no chemistry
    ip = set to NULL if destroyed by chemsitry
    return jp = new particle if created by chemistry
+   return reaction = index of reaction (1 to N) that took place, 0 = no reaction
    resets particle(s) to post-collision outward velocity
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollidePiston::
-collide(Particle::OnePart *&ip, double *norm, double &dtremain, int isr, int isurf)
+collide(Particle::OnePart *&ip, double *norm, double &dtremain,
+        int isr, int & reaction, int isurf)
 {
   nsingle++;
 
   // if surface chemistry defined, attempt reaction
-  // reaction = 1 if reaction took place
+  // reaction > 0 if reaction took place
 
   Particle::OnePart iorig;
   Particle::OnePart *jp = NULL;
-  int reaction = 0;
+  reaction = 0;
 
   if (isr >= 0) {
     if (modify->n_surf_react) memcpy(&iorig,ip,sizeof(Particle::OnePart));
@@ -179,6 +183,6 @@ collide(Particle::OnePart *&ip, double *norm, double &dtremain, int isr, int isu
       particle->nlocal--;
     }
   }
-    
+
   return jp;
 }

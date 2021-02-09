@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -22,7 +22,9 @@
 #include "particle.h"
 #include "grid.h"
 #include "collide.h"
+#include "react.h"
 #include "surf.h"
+#include "surf_react.h"
 #include "comm.h"
 #include "math_extra.h"
 #include "timer.h"
@@ -67,10 +69,10 @@ void Finish::end(int flag, double time_multiple_runs)
 
   if (loopflag) {
     time_other = timer->array[TIME_LOOP] -
-      (timer->array[TIME_MOVE] + timer->array[TIME_COLLIDE] + 
+      (timer->array[TIME_MOVE] + timer->array[TIME_COLLIDE] +
        timer->array[TIME_SORT] + timer->array[TIME_COMM] +
        timer->array[TIME_MODIFY] + timer->array[TIME_OUTPUT]);
-    
+
     time_loop = timer->array[TIME_LOOP];
     MPI_Allreduce(&time_loop,&tmp,1,MPI_DOUBLE,MPI_SUM,world);
     time_loop = tmp/nprocs;
@@ -92,11 +94,11 @@ void Finish::end(int flag, double time_multiple_runs)
 
   if (me == 0) {
     if (screen) fprintf(screen,
-			"Loop time of %g on %d procs for %d steps with " 
+			"Loop time of %g on %d procs for %d steps with "
 			BIGINT_FORMAT " particles\n",
 			time_loop,nprocs,update->nsteps,particle->nglobal);
     if (logfile) fprintf(logfile,
-			 "Loop time of %g on %d procs for %d steps with " 
+			 "Loop time of %g on %d procs for %d steps with "
 			 BIGINT_FORMAT " particles\n",
 			 time_loop,nprocs,update->nsteps,particle->nglobal);
   }
@@ -147,7 +149,7 @@ void Finish::end(int flag, double time_multiple_runs)
     bigint nattempt_total = 0;
     bigint ncollide_total = 0;
     bigint nreact_total = 0;
-    int stuck_total;
+    int stuck_total,axibad_total;
 
     MPI_Allreduce(&update->nmove_running,&nmove_total,1,
                   MPI_SPARTA_BIGINT,MPI_SUM,world);
@@ -174,9 +176,10 @@ void Finish::end(int flag, double time_multiple_runs)
                     MPI_SPARTA_BIGINT,MPI_SUM,world);
     }
     MPI_Allreduce(&update->nstuck,&stuck_total,1,MPI_INT,MPI_SUM,world);
-    
+    MPI_Allreduce(&update->naxibad,&axibad_total,1,MPI_INT,MPI_SUM,world);
+
     double pms,pmsp,ctps,cis,pfc,pfcwb,pfeb,schps,sclps,srps,caps,cps,rps;
-    pms = pmsp = ctps = cis = pfc = pfcwb = pfeb = 
+    pms = pmsp = ctps = cis = pfc = pfcwb = pfeb =
       schps = sclps = srps = caps = cps = rps = 0.0;
 
     bigint elapsed = update->ntimestep - update->first_running_step;
@@ -225,6 +228,7 @@ void Finish::end(int flag, double time_multiple_runs)
         fprintf(screen,"Gas reactions     = " BIGINT_FORMAT " %s\n",
                 nreact_total,MathExtra::num2str(nreact_total,str));
         fprintf(screen,"Particles stuck   = %d\n",stuck_total);
+        fprintf(screen,"Axisymm bad moves = %d\n",axibad_total);
 
         fprintf(screen,"\n");
         fprintf(screen,"Particle-moves/CPUsec/proc: %g\n",pmsp);
@@ -266,6 +270,7 @@ void Finish::end(int flag, double time_multiple_runs)
         fprintf(logfile,"Reactions         = " BIGINT_FORMAT " %s\n",
                 nreact_total,MathExtra::num2str(nreact_total,str));
         fprintf(logfile,"Particles stuck   = %d\n",stuck_total);
+        fprintf(logfile,"Axisymm bad moves = %d\n",axibad_total);
 
         fprintf(logfile,"\n");
         fprintf(logfile,"Particle-moves/CPUsec/proc: %g\n",pmsp);
@@ -286,6 +291,70 @@ void Finish::end(int flag, double time_multiple_runs)
     }
   }
 
+  // gas per-reaction stats
+
+  if (react) {
+    if (me == 0) {
+      if (screen) fprintf(screen,"\nGas reaction tallies:\n");
+      if (logfile) fprintf(logfile,"\nGas reaction tallies:\n");
+    }
+
+    double tally;
+    char *rID;
+    int nlist = react->nlist;
+    if (me == 0) {
+      if (screen) fprintf(screen,"  style %s #-of-reactions %d\n",
+                          react->style,nlist);
+      if (logfile) fprintf(logfile,"  style %s #-of-reactions %d\n",
+                           react->style,nlist);
+    }
+    for (int m = 0; m < nlist; m++) {
+      tally = react->extract_tally(m);
+      if (tally == 0.0) continue;
+      rID = react->reactionID(m);
+      if (me == 0) {
+        if (screen) fprintf(screen,"  reaction %s: %g\n",rID,tally);
+        if (logfile) fprintf(logfile,"  reaction %s: %g\n",rID,tally);
+      }
+    }
+  }
+
+  // surface per-reaction stats
+
+  if (surf->nsr) {
+    if (me == 0) {
+      if (screen) fprintf(screen,"\nSurface reaction tallies:\n");
+      if (logfile) fprintf(logfile,"\nSurface reaction tallies:\n");
+    }
+
+    double tally;
+    char *rID;
+    for (int i = 0; i < surf->nsr; i++) {
+      SurfReact *sr = surf->sr[i];
+      int nlist = sr->nlist;
+      if (me == 0) {
+        if (screen) fprintf(screen,"  id %s style %s #-of-reactions %d\n",
+                            sr->id,sr->style,nlist);
+        if (logfile) fprintf(logfile,"  id %s style %s #-of-reactions %d\n",
+                             sr->id,sr->style,nlist);
+      }
+      tally = sr->compute_vector(1);
+      if (me == 0) {
+        if (screen) fprintf(screen,"    reaction all: %g\n",tally);
+        if (logfile) fprintf(logfile,"    reaction all: %g\n",tally);
+      }
+      for (int m = 0; m < nlist; m++) {
+        tally = sr->compute_vector(2+nlist+m);
+        if (tally == 0.0) continue;
+        rID = sr->reactionID(m);
+        if (me == 0) {
+          if (screen) fprintf(screen,"    reaction %s: %g\n",rID,tally);
+          if (logfile) fprintf(logfile,"    reaction %s: %g\n",rID,tally);
+        }
+      }
+    }
+  }
+
   // histograms
 
   if (histoflag) {
@@ -293,7 +362,7 @@ void Finish::end(int flag, double time_multiple_runs)
       if (screen) fprintf(screen,"\n");
       if (logfile) fprintf(logfile,"\n");
     }
-    
+
     tmp = particle->nlocal;
     stats(1,&tmp,&ave,&max,&min,10,histo);
     if (me == 0) {
@@ -398,13 +467,13 @@ void Finish::end(int flag, double time_multiple_runs)
       }
     }
   }
-    
+
   if (logfile) fflush(logfile);
 }
 
 /* ---------------------------------------------------------------------- */
 
-void Finish::stats(int n, double *data, 
+void Finish::stats(int n, double *data,
 		   double *pave, double *pmax, double *pmin,
 		   int nhisto, int *histo)
 {
