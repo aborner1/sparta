@@ -6,7 +6,7 @@
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
-   certain rights in this software.  This software is distributed under 
+   certain rights in this software.  This software is distributed under
    the GNU General Public License.
 
    See the README file in the top-level SPARTA directory.
@@ -96,7 +96,7 @@ void ComputeSurfKokkos::init_normflux()
     h_normflux(n) = normflux[n];
   Kokkos::deep_copy(d_normflux,h_normflux);
 
-  // Cannot realloc inside a Kokkos parallel region, so size tally2surf as nsurf 
+  // Cannot realloc inside a Kokkos parallel region, so size tally2surf as nsurf
   memoryKK->grow_kokkos(k_tally2surf,tally2surf,nsurf,"surf:tally2surf");
   d_tally2surf = k_tally2surf.d_view;
   d_surf2tally = DAT::t_int_1d("surf:surf2tally",nsurf);
@@ -129,7 +129,7 @@ void ComputeSurfKokkos::pre_surf_tally()
   ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
   particle_kk->sync(Device,SPECIES_MASK);
   d_species = particle_kk->k_species.d_view;
-  d_s2g = particle_kk->k_species2group.view<DeviceType>();
+  d_s2g = particle_kk->k_species2group.d_view;
 
   SurfKokkos* surf_kk = (SurfKokkos*) surf;
   surf_kk->sync(Device,ALL_MASK);
@@ -138,9 +138,9 @@ void ComputeSurfKokkos::pre_surf_tally()
 
   need_dup = sparta->kokkos->need_dup<DeviceType>();
   if (need_dup)
-    dup_array_surf_tally = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterDuplicated>(d_array_surf_tally);
+    dup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterDuplicated>(d_array_surf_tally);
   else
-    ndup_array_surf_tally = Kokkos::Experimental::create_scatter_view<Kokkos::Experimental::ScatterSum, Kokkos::Experimental::ScatterNonDuplicated>(d_array_surf_tally);
+    ndup_array_surf_tally = Kokkos::Experimental::create_scatter_view<typename Kokkos::Experimental::ScatterSum, typename Kokkos::Experimental::ScatterNonDuplicated>(d_array_surf_tally);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -152,8 +152,8 @@ void ComputeSurfKokkos::post_surf_tally()
     dup_array_surf_tally = decltype(dup_array_surf_tally)(); // free duplicated memory
   }
 
-  k_tally2surf.modify<DeviceType>();
-  k_array_surf_tally.modify<DeviceType>();
+  k_tally2surf.modify_device();
+  k_array_surf_tally.modify_device();
 }
 
 /* ----------------------------------------------------------------------
@@ -162,10 +162,10 @@ void ComputeSurfKokkos::post_surf_tally()
 
 int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
 {
-  k_tally2surf.sync<SPAHostType>();
+  k_tally2surf.sync_host();
   ptr = tally2surf;
 
-  k_array_surf_tally.sync<SPAHostType>();
+  k_array_surf_tally.sync_host();
 
   auto h_ntally = Kokkos::create_mirror_view(d_ntally);
   Kokkos::deep_copy(h_ntally,d_ntally);
@@ -176,7 +176,7 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
 
 void ComputeSurfKokkos::grow_tally()
 {
-  // Cannot realloc inside a Kokkos parallel region, so size tally2surf the 
+  // Cannot realloc inside a Kokkos parallel region, so size tally2surf the
   //  same as surf2tally
 
   int nsurf = surf->nlocal + surf->nghost;
