@@ -87,6 +87,9 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   nslist_compute = nblist_compute = 0;
   slist_compute = blist_compute = NULL;
   slist_active = blist_active = NULL;
+   
+  heatflux = heatflux2 = NULL;
+  clocal = cglobal = NULL;
 
   nulist_surfcollide  = 0;
   ulist_surfcollide = NULL;
@@ -181,6 +184,41 @@ void Update::init()
 
   if (moveperturb) perturbflag = 1;
   else perturbflag = 0;
+     	
+  int igroup = 0;
+  if (igroup < 0) error->all(FLERR,"Dump surf group ID does not exist");
+  groupbit = surf->bitmask[igroup];
+
+  Surf::Line *lines = surf->lines;
+  Surf::Tri *tris = surf->tris;
+  nslocal = surf->nlocal;
+
+  nchoose = 0;
+  for (int i = 0; i < nslocal; i++)
+    if (domain->dimension == 2) {
+      if (lines[i].mask & groupbit) nchoose++;
+    } else {
+      if (tris[i].mask & groupbit) nchoose++;
+    }
+  if (nchoose != nslocal) fprintf(screen,"On Proc %d, nslocal %d and nchoose %d are different\n",comm->me,nslocal,nchoose);
+
+  memory->create(cglobal,nchoose,"update/surf:cglobal");
+  memory->create(clocal,nchoose,"update/surf:clocal");
+
+  nchoose = 0;
+  for (int i = 0; i < nslocal; i++)
+    if (domain->dimension == 2) {
+      if (lines[i].mask & groupbit) {
+        cglobal[nchoose] = lines[i].id;
+        clocal[nchoose++] = i;
+      }
+    } else {
+      if (tris[i].mask & groupbit) {
+        cglobal[nchoose] = tris[i].id;
+        clocal[nchoose++] = i;
+      }
+    }
+   
 }
 
 /* ---------------------------------------------------------------------- */
@@ -219,6 +257,9 @@ void Update::run(int nsteps)
 {
   int n_start_of_step = modify->n_start_of_step;
   int n_end_of_step = modify->n_end_of_step;
+   
+  memory->create(heatflux,surf->nsurf,"update:heatflux");
+  memory->create(heatflux2,surf->nsurf,"update:heatflux2"); 
 
   // cellweightflag = 1 if grid-based particle weighting is ON
 
@@ -340,6 +381,14 @@ template < int DIM, int SURF > void Update::move()
   Surf::Line *lines = surf->lines;
   double dt = update->dt;
   int notfirst = 0;
+   
+  if((ntimestep > 1000) && ((ntimestep-1) % 1000 == 0))
+   {
+   for (int i = 0; i < surf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
+   for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[2]->vector_surf[i];
+   MPI_Barrier(world);
+   MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
+   }
 
   // DEBUG
 
@@ -774,10 +823,10 @@ template < int DIM, int SURF > void Update::move()
 
               if (DIM == 3)
                 jpart = surf->sc[tri->isc]->
-                  collide(ipart,tri->norm,dtremain,tri->isr,reaction);
+                  collide(ipart,tri->norm,dtremain,tri->isr,reaction,minsurf);
               if (DIM != 3)
                 jpart = surf->sc[line->isc]->
-                  collide(ipart,line->norm,dtremain,line->isr,reaction);
+                  collide(ipart,line->norm,dtremain,line->isr,reaction,minsurf);
 
               if (jpart) {
                 particles = particle->particles;

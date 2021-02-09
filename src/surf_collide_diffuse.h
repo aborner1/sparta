@@ -32,8 +32,7 @@ class SurfCollideDiffuse : public SurfCollide {
   ~SurfCollideDiffuse();
   void init();
   Particle::OnePart *collide(Particle::OnePart *&, double *, double &,
-                             int, int &);
-
+                             int, int &, int);
   void dynamic();
 
  protected:
@@ -51,7 +50,7 @@ class SurfCollideDiffuse : public SurfCollide {
   double vstream[3];
   class RanPark *random;     // RNG for particle reflection
 
-  void diffuse(Particle::OnePart *, double *);
+  void diffuse(Particle::OnePart *, double *, int);
 };
 
 }

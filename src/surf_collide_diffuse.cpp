@@ -143,7 +143,9 @@ void SurfCollideDiffuse::init()
 ------------------------------------------------------------------------- */
 
 Particle::OnePart *SurfCollideDiffuse::
-collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction)
+
+collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction, int isurf)
+
 {
   nsingle++;
 
@@ -164,9 +166,9 @@ collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction)
   // resets v, roteng, vibeng
   // if new particle J created, also need to trigger any fixes
 
-  if (ip) diffuse(ip,norm);
+  if (ip) diffuse(ip,norm,isurf);
   if (jp) {
-    diffuse(jp,norm);
+    diffuse(jp,norm,isurf);
     if (modify->n_add_particle) {
       int j = jp - particle->particles;
       modify->add_particle(j,twall,twall,twall,vstream);
@@ -199,7 +201,7 @@ collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction)
    resets particle(s) to post-collision outward velocity
 ------------------------------------------------------------------------- */
 
-void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
+void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm, int jsurf)
 {
   // specular reflection
   // reflect incident v around norm
@@ -222,8 +224,17 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
     double tangent1[3],tangent2[3];
     Particle::Species *species = particle->species;
     int ispecies = p->ispecies;
+     
+    double twall_new = twall;
+    double *heatflux;
+    heatflux = update->heatflux2;
+    if (update->ntimestep > 1000) {
+     if ((heatflux[jsurf] > 100.0) && (heatflux[jsurf] < 1.e6)) {
+        twall_new = pow((heatflux[jsurf]/(4.8195e-8)),0.25);
+     }
+    }     
 
-    double vrm = sqrt(2.0*update->boltz * twall / species[ispecies].mass);
+    double vrm = sqrt(2.0*update->boltz * twall_new / species[ispecies].mass);
     double vperp = vrm * sqrt(-log(random->uniform()));
 
     double theta = MY_2PI * random->uniform();
@@ -298,8 +309,8 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
 
     // initialize rot/vib energy
 
-    p->erot = particle->erot(ispecies,twall,random);
-    p->evib = particle->evib(ispecies,twall,random);
+    p->erot = particle->erot(ispecies,twall_new,random);
+    p->evib = particle->evib(ispecies,twall_new,random);
   }
 }
 
