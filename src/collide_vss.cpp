@@ -705,7 +705,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
                                 (random->uniform()*(max_level+AdjustFactor));
                               pevib = ivib * update->boltz * species[sp].vibtemp[imode];
                               State_prob = pow((1.0 - pevib / E_Dispose),
-                                               (1.5 - params[sp].omega));
+                                               (1.5 - params[ip->ispecies][jp->ispecies].omega));
                             } while (State_prob < random->uniform());
 
                             vibmode[pindex][imode] = ivib;
