@@ -1,0 +1,13 @@
+# reactions on surface
+
+O --> O2
+E S 0.5
+
+O --> NULL
+R S 0.5
+
+N --> N2
+E S 0.5
+
+N --> NULL
+R S 0.5
