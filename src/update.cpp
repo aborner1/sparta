@@ -385,7 +385,7 @@ template < int DIM, int SURF > void Update::move()
   if((ntimestep > 1000) && ((ntimestep-1) % 1000 == 0))
    {
    for (int i = 0; i < surf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
-   for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[2]->vector_surf[i];
+   for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[1]->vector_surf[i];
    MPI_Barrier(world);
    MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
    }
