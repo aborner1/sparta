@@ -452,8 +452,13 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
       vec[k++] -= etot * fluxscale;
       break;
     case SPECEINT:
-      eint = (ip->erot + ip->evib) / imass;
-      vec[k++] += eint;
+      eint = 0.0;
+      if (ip) eint += (ip->erot + ip->evib) / imass;
+      if (jp) {
+        eint += (jp->erot + jp->evib) / jmass;
+        eint *= 0.5;
+      }
+      vec[k++] += weight * eint;
       break;
     }
   }
