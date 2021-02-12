@@ -1,4 +1,0 @@
-dimension   	    3
-create_box          -2.505 0.895 -2.5 2.5 -2.5 2.5
-read_grid           grid.out
-slice               0 1 0 0.0 0.0 0.0
