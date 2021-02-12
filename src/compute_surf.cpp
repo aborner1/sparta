@@ -28,7 +28,7 @@
 using namespace SPARTA_NS;
 
 enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
-     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ETOT};
+     XSHEAR,YSHEAR,ZSHEAR,KE,EROT,EVIB,ETOT,SPECEINT};
 
 #define DELTA 4096
 
@@ -70,6 +70,7 @@ ComputeSurf::ComputeSurf(SPARTA *sparta, int narg, char **arg) :
     else if (strcmp(arg[iarg],"erot") == 0) which[nvalue++] = EROT;
     else if (strcmp(arg[iarg],"evib") == 0) which[nvalue++] = EVIB;
     else if (strcmp(arg[iarg],"etot") == 0) which[nvalue++] = ETOT;
+    else if (strcmp(arg[iarg],"speceint") == 0) which[nvalue++] = SPECEINT;
     else error->all(FLERR,"Illegal compute surf command");
     iarg++;
   }
@@ -267,7 +268,7 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
   // if surf is transparent, all flux tallying is for incident particle only
 
   double vsqpre,ivsqpost,jvsqpost;
-  double ierot,jerot,ievib,jevib,iother,jother,otherpre,etot;
+  double ierot,jerot,ievib,jevib,iother,jother,otherpre,etot,eint;
   double pdelta[3],pnorm[3],ptang[3],pdelta_force[3];
 
   double *norm;
@@ -298,11 +299,12 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
       vec[k++] += weight;
       break;
     case MFLUX:
-      vec[k++] += origmass;
+      vec[k] += origmass * fluxscale;
       if (!transparent) {
-        if (ip) vec[k++] -= imass;
-        if (jp) vec[k++] -= jmass;
+        if (ip) vec[k] -= imass * fluxscale;
+        if (jp) vec[k] -= jmass * fluxscale;
       }
+      k++;
       break;
     case FX:
       if (!fflag) {
@@ -435,12 +437,12 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
       vsqpre = origmass * MathExtra::lensq3(vorig);
       otherpre = iorig->erot + iorig->evib;
       if (ip) {
-	ivsqpost = imass * MathExtra::lensq3(ip->v);
-	iother = ip->erot + ip->evib;
+        ivsqpost = imass * MathExtra::lensq3(ip->v);
+        iother = ip->erot + ip->evib;
       } else ivsqpost = iother = 0.0;
       if (jp) {
-	jvsqpost = jmass * MathExtra::lensq3(jp->v);
-	jother = jp->erot + jp->evib;
+        jvsqpost = jmass * MathExtra::lensq3(jp->v);
+        jother = jp->erot + jp->evib;
       } else jvsqpost = jother = 0.0;
       if (transparent)
         etot = -0.5*mvv2e*vsqpre - weight*otherpre;
@@ -448,6 +450,10 @@ void ComputeSurf::surf_tally(int isurf, int icell, int reaction,
         etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
           weight * (iother + jother - otherpre);
       vec[k++] -= etot * fluxscale;
+      break;
+    case SPECEINT:
+      eint = (ip->erot + ip->evib) / imass;
+      vec[k++] += eint;
       break;
     }
   }

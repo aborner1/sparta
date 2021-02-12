@@ -166,7 +166,13 @@ collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction, 
   // resets v, roteng, vibeng
   // if new particle J created, also need to trigger any fixes
 
-  if (ip) diffuse(ip,norm,isurf);
+  if (ip) {
+    diffuse(ip,norm,isurf);
+    if (modify->n_add_particle) {
+    int i = ip - particle->particles;
+    modify->add_particle(i,twall,twall,twall,vstream);
+    }
+  }
   if (jp) {
     diffuse(jp,norm,isurf);
     if (modify->n_add_particle) {
@@ -208,8 +214,8 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm, int jsurf)
 
   if (random->uniform() > acc) {
     MathExtra::reflect3(p->v,norm);
-    p->erot = particle->erot(p->ispecies,twall,random);
-    p->evib = particle->evib(p->ispecies,twall,random);
+//    p->erot = particle->erot(p->ispecies,twall,random);
+//    p->evib = particle->evib(p->ispecies,twall,random);
 
   // diffuse reflection
   // vrm = most probable speed of species, eqns (4.1) and (4.7)
