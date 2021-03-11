@@ -1576,6 +1576,7 @@ void Cut3d::walk()
     vert->next = -1;
 
     loops.grow(nloop+1);
+    if ((abs(volume) < 1e-30) && (volume < 0.0)) volume = 0.0;
     loops[nloop].volume = volume;
     loops[nloop].flag = flag;
     loops[nloop].n = ncount;
