@@ -45,11 +45,12 @@ class Update : protected Pointers {
 
   int nsurface;
   double *heatflux,*heatflux2;
-  int nslocal;               // # of surf elements owned by this proc
+  int nown,nslocal;               // # of surf elements owned by this proc
   int nchoose;               // # of surf elements output by this proc
   int *cglobal;              // indices of global elements for nchoose
   int *clocal;               // indices of local owned elements for nchoose
   int groupbit;
+  int firstflag;
    
                          // current step counters
   int niterate;          // iterations of move/comm

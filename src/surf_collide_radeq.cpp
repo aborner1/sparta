@@ -15,7 +15,8 @@
 #include "math.h"
 #include "stdlib.h"
 #include "string.h"
-#include "surf_collide_diffuse.h"
+#include "surf_collide_radeq.h"
+#include "grid.h"
 #include "surf.h"
 #include "surf_react.h"
 #include "input.h"
@@ -24,11 +25,14 @@
 #include "domain.h"
 #include "update.h"
 #include "modify.h"
+#include "fix.h"
 #include "comm.h"
 #include "random_mars.h"
 #include "random_park.h"
 #include "math_const.h"
 #include "math_extra.h"
+#include "memory.h"
+#include "mpi.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
@@ -36,66 +40,60 @@ using namespace MathConst;
 
 /* ---------------------------------------------------------------------- */
 
-SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
+SurfCollideRadeq::SurfCollideRadeq(SPARTA *sparta, int narg, char **arg) :
   SurfCollide(sparta, narg, arg)
 {
-  if (narg < 4) error->all(FLERR,"Illegal surf_collide diffuse command");
+  if (narg < 4) error->all(FLERR,"Illegal surf_collide radeq command");
 
-  allowreact = 1;
+  if (surf->implicit)
+    error->all(FLERR,"Cannot use surf_collide radeq with implicit surfs");
 
-  tstr = NULL;
+  id_qw = NULL;
 
-  if (strstr(arg[2],"v_") == arg[2]) {
-    dynamicflag = 1;
-    int n = strlen(&arg[2][2]) + 1;
-    tstr = new char[n];
-    strcpy(tstr,&arg[2][2]);
-  } else {
-    twall = input->numeric(FLERR,arg[2]);
-    if (twall <= 0.0) error->all(FLERR,"Surf_collide diffuse temp <= 0.0");
+  twall = input->numeric(FLERR,arg[2]);
+  if (twall <= 0.0) error->all(FLERR,"Surf_collide radeq twall <= 0.0");
+
+  if (strncmp(arg[3],"f_",2) == 0) {
+    int n = strlen(arg[3]);
+    id_qw = new char[n];
+    strcpy(id_qw,&arg[3][2]);
+
+    char *ptr = strchr(id_qw,'[');
+    if (ptr) {
+      if (id_qw[strlen(id_qw)-1] != ']')
+        error->all(FLERR,"Invalid qw in Surf_collide radeq command");
+      qwindex = atoi(ptr+1);
+      *ptr = '\0';
+    } else qwindex = 0;
+
+  m = modify->find_fix(id_qw);
+  if (m < 0) error->all(FLERR,"Could not find Surf_collide radeq fix ID");
+  if (modify->fix[m]->per_surf_flag == 0)
+    error->all(FLERR,"Surf_collide radeq fix does not "
+               "compute per-surf info");
+  if (qwindex == 0 && modify->fix[m]->size_per_surf_cols > 0)
+    error->all(FLERR,"Surf_collide radeq fix does not "
+               "compute per-surf vector");
+  if (qwindex > 0 && modify->fix[m]->size_per_surf_cols == 0)
+    error->all(FLERR,"Surf_collide radeq fix does not "
+               "compute per-surf array");
+  if (qwindex > 0 && qwindex > modify->fix[m]->size_per_surf_cols)
+    error->all(FLERR,"Surf_collide radeq fix array is "
+               "accessed out-of-range");
   }
 
-  acc = input->numeric(FLERR,arg[3]);
-  if (acc < 0.0 || acc > 1.0)
-    error->all(FLERR,"Illegal surf_collide diffuse command");
+  emi = input->numeric(FLERR,arg[4]);
+  if (emi <= 0.0 || emi > 1.0)
+    error->all(FLERR,"Emissivity of surface has to be between 0 and 1");
 
-  // optional args
+  prefactor = 1.0 / (emi *  5.670374419e-8);
 
-  tflag = rflag = 0;
+  // initialize data structures
+  // trigger setup of list of owned surf elements belonging to surf group
 
-  int iarg = 4;
-  while (iarg < narg) {
-    if (strcmp(arg[iarg],"translate") == 0) {
-      if (iarg+4 > narg)
-        error->all(FLERR,"Illegal surf_collide diffuse command");
-      tflag = 1;
-      vx = atof(arg[iarg+1]);
-      vy = atof(arg[iarg+2]);
-      vz = atof(arg[iarg+3]);
-      iarg += 4;
-    } else if (strcmp(arg[iarg],"rotate") == 0) {
-      if (iarg+7 > narg)
-        error->all(FLERR,"Illegal surf_collide diffuse command");
-      rflag = 1;
-      px = atof(arg[iarg+1]);
-      py = atof(arg[iarg+2]);
-      pz = atof(arg[iarg+3]);
-      wx = atof(arg[iarg+4]);
-      wy = atof(arg[iarg+5]);
-      wz = atof(arg[iarg+6]);
-      if (domain->dimension == 2 && pz != 0.0)
-        error->all(FLERR,"Surf_collide diffuse rotation invalid for 2d");
-      if (domain->dimension == 2 && (wx != 0.0 || wy != 0.0))
-        error->all(FLERR,"Surf_collide diffuse rotation invalid for 2d");
-      iarg += 7;
-    } else error->all(FLERR,"Illegal surf_collide diffuse command");
-  }
-
-  if (tflag && rflag) error->all(FLERR,"Illegal surf_collide diffuse command");
-  if (tflag || rflag) trflag = 1;
-  else trflag = 0;
-
-  vstream[0] = vstream[1] = vstream[2] = 0.0;
+  firstflag = 1;
+  qw = NULL;
+  cglobal = NULL;
 
   // initialize RNG
 
@@ -106,29 +104,98 @@ SurfCollideDiffuse::SurfCollideDiffuse(SPARTA *sparta, int narg, char **arg) :
 
 /* ---------------------------------------------------------------------- */
 
-SurfCollideDiffuse::~SurfCollideDiffuse()
+SurfCollideRadeq::~SurfCollideRadeq()
 {
   if (copy) return;
 
-  delete [] tstr;
+  delete [] id_qw;
+  memory->destroy(qw);
+  memory->destroy(cglobal);
+
   delete random;
 }
 
 /* ---------------------------------------------------------------------- */
 
-void SurfCollideDiffuse::init()
+void SurfCollideRadeq::init()
 {
   SurfCollide::init();
 
-  // check variable
+  if (!firstflag) return;
+  firstflag = 0;
 
-  if (tstr) {
-    tvar = input->variable->find(tstr);
-    if (tvar < 0)
-      error->all(FLERR,"Surf_collide diffuse variable name does not exist");
-    if (!input->variable->equal_style(tvar))
-      error->all(FLERR,"Surf_collide diffuse variable is invalid style");
+  int ifix = modify->find_fix(id_qw);
+  if (ifix < 0)
+    error->all(FLERR,"Could not find surf_collide radeq fix ID");
+  fqw = modify->fix[ifix];
+
+  nvalid = fqw->per_surf_freq + 1;
+
+  // one-time setup of lists of owned elements contributing to radeq
+  // NOTE: will need to recalculate, if allow addition of surf elements
+  // nown = # of surf elements I own
+  // nchoose = # of nown surf elements in surface group
+  // cglobal[] = global indices for nchoose elements
+  //             used to access lines/tris in Surf
+  // clocal[] = local indices for nchoose elements
+  //            used to access nown data from per-surf computes,fixes,variables
+
+  dimension = domain->dimension;
+  distributed = surf->distributed;
+  implicit = surf->implicit;
+
+  int igroup = 0;
+  if (igroup < 0) error->all(FLERR,"Surf_collide radeq group ID does not exist");
+  groupbit = surf->bitmask[igroup];
+
+  Surf::Line *lines;
+  Surf::Tri *tris;
+
+  if (distributed && !implicit) lines = surf->mylines;
+  else lines = surf->lines;
+  if (distributed && !implicit) tris = surf->mytris;
+  else tris = surf->tris;
+
+  nown = surf->nown;
+  nsurf = surf->nsurf;
+  int m;
+  int me = comm->me;
+  int nprocs = comm->nprocs;
+
+  nchoose = 0;
+  for (int i = 0; i < nown; i++) {
+    if (dimension == 2) {
+      if (!distributed) m = me + i*nprocs;
+      else m = i;
+      if (lines[m].mask & groupbit) nchoose++;
+    } else {
+      if (!distributed) m = me + i*nprocs;
+      else m = i;
+      if (tris[m].mask & groupbit) nchoose++;
+    }
   }
+
+  memory->create(cglobal,nchoose,"surf_collide radeq:cglobal");
+
+  nchoose = 0;
+  for (int i = 0; i < nown; i++) {
+    if (dimension == 2) {
+      if (!distributed) m = me + i*nprocs;
+      else m = i;
+      if (lines[m].mask & groupbit) {
+        cglobal[nchoose++] = m;
+      }
+    } else {
+      if (!distributed) m = me + i*nprocs;
+      else m = i;
+      if (tris[m].mask & groupbit) {
+        cglobal[nchoose++] = m;
+      }
+    }
+  }
+
+  memory->create(qw,nsurf,"surf_collide radeq:init");
+  for (int i = 0; i < nsurf; i++) qw[i] = 0.0;
 }
 
 /* ----------------------------------------------------------------------
@@ -142,7 +209,7 @@ void SurfCollideDiffuse::init()
    resets particle(s) to post-collision outward velocity
 ------------------------------------------------------------------------- */
 
-Particle::OnePart *SurfCollideDiffuse::
+Particle::OnePart *SurfCollideRadeq::
 
 collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction, int isurf)
 
@@ -167,14 +234,14 @@ collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction, 
   // if new particle J created, also need to trigger any fixes
 
   if (ip) {
-    diffuse(ip,norm,isurf);
+    twall = radeq(ip,norm,isurf);
     if (modify->n_add_particle) {
     int i = ip - particle->particles;
     modify->add_particle(i,twall,twall,twall,vstream);
     }
   }
   if (jp) {
-    diffuse(jp,norm,isurf);
+    twall = radeq(jp,norm,isurf);
     if (modify->n_add_particle) {
       int j = jp - particle->particles;
       modify->add_particle(j,twall,twall,twall,vstream);
@@ -207,16 +274,8 @@ collide(Particle::OnePart *&ip, double *norm, double &, int isr, int &reaction, 
    resets particle(s) to post-collision outward velocity
 ------------------------------------------------------------------------- */
 
-void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm, int jsurf)
+double SurfCollideRadeq::radeq(Particle::OnePart *p, double *norm, int jsurf)
 {
-  // specular reflection
-  // reflect incident v around norm
-
-  if (random->uniform() > acc) {
-    MathExtra::reflect3(p->v,norm);
-//    p->erot = particle->erot(p->ispecies,twall,random);
-//    p->evib = particle->evib(p->ispecies,twall,random);
-
   // diffuse reflection
   // vrm = most probable speed of species, eqns (4.1) and (4.7)
   // vperp = velocity component perpendicular to surface along norm, eqn (12.3)
@@ -226,19 +285,33 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm, int jsurf)
   // tangent2 = norm x tangent1 = orthogonal tangential direction
   // tangent12 are both unit vectors
 
-  } else {
     double tangent1[3],tangent2[3];
     Particle::Species *species = particle->species;
     int ispecies = p->ispecies;
-     
     double twall_new = twall;
-    double *heatflux;
-    heatflux = update->heatflux2;
-    if (update->ntimestep > 100) {
-     if ((heatflux[jsurf] > 100.0) && (heatflux[jsurf] < 1.e6)) {
-        twall_new = pow((heatflux[jsurf]/(4.8195e-8)),0.25);
+
+    if (update->ntimestep >= nvalid) {
+      nvalid = (update->ntimestep/fqw->per_surf_freq)*fqw->per_surf_freq +
+        fqw->per_surf_freq;
+      nvalid -= (fqw->per_surf_freq-1)*fqw->nevery;
+      if (nvalid <= update->ntimestep) nvalid += fqw->per_surf_freq;
+
+      if (qwindex == 0) {
+        double *vector = fqw->vector_surf;
+        for (int i = 0; i < nchoose; i++)
+          qw[cglobal[i]] = vector[i];
+      }
+      else {
+        double **array = fqw->array_surf;
+        int index = qwindex-1;
+        for (int i = 0; i < nchoose; i++)
+          qw[cglobal[i]] = array[i][index];
+      }
+    }
+     
+     if ((qw[jsurf] > 300.0) && (qw[jsurf] < 1.e7)) {
+        twall_new = pow((prefactor * qw[jsurf]),0.25);
      }
-    }     
 
     double vrm = sqrt(2.0*update->boltz * twall_new / species[ispecies].mass);
     double vperp = vrm * sqrt(-log(random->uniform()));
@@ -250,8 +323,6 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm, int jsurf)
 
     double *v = p->v;
     double dot = MathExtra::dot3(v,norm);
-
-    double beta_un,normalized_distbn_fn;
 
     tangent1[0] = v[0] - dot*norm[0];
     tangent1[1] = v[1] - dot*norm[1];
@@ -267,65 +338,14 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm, int jsurf)
     MathExtra::norm3(tangent1);
     MathExtra::cross3(norm,tangent1,tangent2);
 
-    // add in translation or rotation vector if specified
-    // only keep portion of vector tangential to surface element
-
-    if (trflag) {
-      double vxdelta,vydelta,vzdelta;
-      if (tflag) {
-        vxdelta = vx; vydelta = vy; vzdelta = vz;
-        double dot = vxdelta*norm[0] + vydelta*norm[1] + vzdelta*norm[2];
-
-        if (fabs(dot) > 0.001) {
-          dot /= vrm;
-          do {
-            do {
-              beta_un = (6.0*random->uniform() - 3.0);
-            } while (beta_un + dot < 0.0);
-            normalized_distbn_fn = 2.0 * (beta_un + dot) /
-              (dot + sqrt(dot*dot + 2.0)) *
-              exp(0.5 + (0.5*dot)*(dot-sqrt(dot*dot + 2.0)) -
-                  beta_un*beta_un);
-          } while (normalized_distbn_fn < random->uniform());
-          vperp = beta_un*vrm;
-        }
-
-      } else {
-        double *x = p->x;
-        vxdelta = wy*(x[2]-pz) - wz*(x[1]-py);
-        vydelta = wz*(x[0]-px) - wx*(x[2]-pz);
-        vzdelta = wx*(x[1]-py) - wy*(x[0]-px);
-        double dot = vxdelta*norm[0] + vydelta*norm[1] + vzdelta*norm[2];
-        vxdelta -= dot*norm[0];
-        vydelta -= dot*norm[1];
-        vzdelta -= dot*norm[2];
-      }
-
-      v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0] + vxdelta;
-      v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1] + vydelta;
-      v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2] + vzdelta;
-
-    // no translation or rotation
-
-    } else {
-      v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
-      v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];
-      v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2];
-    }
+    v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
+    v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];
+    v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2];
 
     // initialize rot/vib energy
 
     p->erot = particle->erot(ispecies,twall_new,random);
     p->evib = particle->evib(ispecies,twall_new,random);
-  }
-}
 
-/* ----------------------------------------------------------------------
-   set current surface temperature
-------------------------------------------------------------------------- */
-
-void SurfCollideDiffuse::dynamic()
-{
-  twall = input->variable->compute_equal(tvar);
-  if (twall <= 0.0) error->all(FLERR,"Surf_collide diffuse temp <= 0.0");
+    return twall_new;
 }

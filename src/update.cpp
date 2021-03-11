@@ -87,9 +87,10 @@ Update::Update(SPARTA *sparta) : Pointers(sparta)
   nslist_compute = nblist_compute = 0;
   slist_compute = blist_compute = NULL;
   slist_active = blist_active = NULL;
-   
-  heatflux = heatflux2 = NULL;
-  clocal = cglobal = NULL;
+  
+//  firstflag = 1;
+//  heatflux = heatflux2 = NULL;
+//  clocal = cglobal = NULL;
 
   nulist_surfcollide  = 0;
   ulist_surfcollide = NULL;
@@ -109,6 +110,8 @@ Update::~Update()
 {
   if (copymode) return;
 
+//  memory->destroy(cglobal);
+//  memory->destroy(clocal);
   delete [] unit_style;
   memory->destroy(mlist);
   delete [] slist_compute;
@@ -184,41 +187,114 @@ void Update::init()
 
   if (moveperturb) perturbflag = 1;
   else perturbflag = 0;
-     	
-  int igroup = 0;
-  if (igroup < 0) error->all(FLERR,"Dump surf group ID does not exist");
-  groupbit = surf->bitmask[igroup];
 
-  Surf::Line *lines = surf->lines;
-  Surf::Tri *tris = surf->tris;
-  nslocal = surf->nlocal;
+//  int igroup = 0;
+//  if (igroup < 0) error->all(FLERR,"Dump surf group ID does not exist");
+//  groupbit = surf->bitmask[igroup];
 
-  nchoose = 0;
-  for (int i = 0; i < nslocal; i++)
-    if (domain->dimension == 2) {
-      if (lines[i].mask & groupbit) nchoose++;
-    } else {
-      if (tris[i].mask & groupbit) nchoose++;
-    }
-  if (nchoose != nslocal) fprintf(screen,"On Proc %d, nslocal %d and nchoose %d are different\n",comm->me,nslocal,nchoose);
+//  Surf::Line *lines = surf->lines;
+//  Surf::Tri *tris = surf->tris;
+//  nslocal = surf->nlocal;
 
-  memory->create(cglobal,nchoose,"update/surf:cglobal");
-  memory->create(clocal,nchoose,"update/surf:clocal");
+//  nchoose = 0;
+//  for (int i = 0; i < nslocal; i++)
+//    if (domain->dimension == 2) {
+//      if (lines[i].mask & groupbit) nchoose++;
+//    } else {
+//      if (tris[i].mask & groupbit) nchoose++;
+//    }
+//  if (nchoose != nslocal) fprintf(screen,"On Proc %d, nslocal %d and nchoose %d are different\n",comm->me,nslocal,nchoose);
 
-  nchoose = 0;
-  for (int i = 0; i < nslocal; i++)
-    if (domain->dimension == 2) {
-      if (lines[i].mask & groupbit) {
-        cglobal[nchoose] = lines[i].id;
-        clocal[nchoose++] = i;
-      }
-    } else {
-      if (tris[i].mask & groupbit) {
-        cglobal[nchoose] = tris[i].id;
-        clocal[nchoose++] = i;
-      }
-    }
-   
+//  memory->create(cglobal,nchoose,"update/surf:cglobal");
+//  memory->create(clocal,nchoose,"update/surf:clocal");
+
+//  nchoose = 0;
+//  for (int i = 0; i < nslocal; i++)
+//    if (domain->dimension == 2) {
+//      if (lines[i].mask & groupbit) {
+//        cglobal[nchoose] = lines[i].id;
+//        clocal[nchoose++] = i;
+//      }
+//    } else {
+//      if (tris[i].mask & groupbit) {
+//        cglobal[nchoose] = tris[i].id;
+//        clocal[nchoose++] = i;
+//      }
+//    }
+
+//  for (int i = 0; i < nchoose; i++) printf("me %d i %d cglobal[i] %d clocal[i] %d\n",comm->me,i,cglobal[i],clocal[i]);
+
+//  // one-time setup of lists of owned elements contributing to radeq
+//  // NOTE: will need to recalculate, if allow addition of surf elements
+//  // nown = # of surf elements I own
+//  // nchoose = # of nown surf elements in surface group
+//  // cglobal[] = global indices for nchoose elements
+//  //             used to access lines/tris in Surf
+//  // clocal[] = local indices for nchoose elements
+//  //            used to access nown data from per-surf computes,fixes,variables
+
+//  if (!firstflag) return;
+//  firstflag = 0;
+
+//  int dimension = domain->dimension;
+//  int distributed = surf->distributed;
+//  int implicit = surf->implicit;
+
+//  int igroup = 0;
+//  if (igroup < 0) error->all(FLERR,"Radeq group ID does not exist");
+//  groupbit = surf->bitmask[igroup];
+
+//  Surf::Line *lines;
+//  Surf::Tri *tris;
+
+//  if (distributed && !implicit) lines = surf->mylines;
+//  else lines = surf->lines;
+//  if (distributed && !implicit) tris = surf->mytris;
+//  else tris = surf->tris;
+
+//  nown = surf->nown;
+//  int m;
+//  int me = comm->me;
+//  int nprocs = comm->nprocs;
+
+//  nchoose = 0;
+//  for (int i = 0; i < nown; i++) {
+//    if (dimension == 2) {
+//      if (!distributed) m = me + i*nprocs;
+//      else m = i;
+//      if (lines[m].mask & groupbit) nchoose++;
+//    } else {
+//      if (!distributed) m = me + i*nprocs;
+//      else m = i;
+//      if (tris[m].mask & groupbit) nchoose++;
+//    }
+//  }
+
+//  memory->create(cglobal,nchoose,"dump/surf:cglobal");
+//  memory->create(clocal,nchoose,"dump/surf:clocal");
+
+//  nchoose = 0;
+//  for (int i = 0; i < nown; i++) {
+//    if (dimension == 2) {
+//      if (!distributed) m = me + i*nprocs;
+//      else m = i;
+//      if (lines[m].mask & groupbit) {
+//        cglobal[nchoose] = m;
+//        clocal[nchoose++] = i;
+//      }
+//    } else {
+//      if (!distributed) m = me + i*nprocs;
+//      else m = i;
+//      if (tris[m].mask & groupbit) {
+//        cglobal[nchoose] = m;
+//        clocal[nchoose++] = i;
+//      }
+//    }
+//  }
+//  for (int i = 0; i < nchoose; i++) printf("me %d i %d cglobal[i] %d clocal[i] %d\n",comm->me,i,cglobal[i],clocal[i]);
+
+//  memory->create(heatflux,,"update:heatflux");
+//  memory->create(heatflux2,surf->nsurf,"update:heatflux2");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -257,10 +333,10 @@ void Update::run(int nsteps)
 {
   int n_start_of_step = modify->n_start_of_step;
   int n_end_of_step = modify->n_end_of_step;
-   
-  memory->create(heatflux,surf->nsurf,"update:heatflux");
-  memory->create(heatflux2,surf->nsurf,"update:heatflux2"); 
 
+//  memory->create(heatflux,surf->nsurf,"update:heatflux");
+//  memory->create(heatflux2,surf->nsurf,"update:heatflux2");
+   
   // cellweightflag = 1 if grid-based particle weighting is ON
 
   int cellweightflag = 0;
@@ -382,13 +458,16 @@ template < int DIM, int SURF > void Update::move()
   double dt = update->dt;
   int notfirst = 0;
    
-  if((ntimestep > 1000) && ((ntimestep-1) % 1000 == 0))
-   {
-   for (int i = 0; i < surf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
-   for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[1]->vector_surf[i];
-   MPI_Barrier(world);
-   MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
-   }
+//  if((ntimestep > 100) && ((ntimestep-1) % 100 == 0))
+//   {
+//   for (int i = 0; i < surf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
+//   for (int i = 0; i < nchoose; i++) heatflux[clocal[i]] = modify->fix[1]->vector_surf[i];
+//   MPI_Barrier(world);
+//   MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
+//   printf("me %d timestep %d\n",comm->me,ntimestep);
+//   for (int i = 0; i < nchoose; i++) printf("me %d i %d clocal[i] %d and qw %f\n",comm->me,i,clocal[i],heatflux2[clocal[i]]);
+//   printf("\n");
+//   }
 
   // DEBUG
 
