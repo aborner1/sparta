@@ -45,6 +45,8 @@ SurfCollideRadeq::SurfCollideRadeq(SPARTA *sparta, int narg, char **arg) :
 {
   if (narg < 4) error->all(FLERR,"Illegal surf_collide radeq command");
 
+  allowreact = 1;
+
   if (surf->implicit)
     error->all(FLERR,"Cannot use surf_collide radeq with implicit surfs");
 
