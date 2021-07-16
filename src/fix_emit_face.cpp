@@ -26,7 +26,7 @@
 #include "modify.h"
 #include "geometry.h"
 #include "input.h"
-#include "random_park.h"
+#include "random_knuth.h"
 #include "math_const.h"
 #include "memory.h"
 #include "error.h"
@@ -202,6 +202,17 @@ void FixEmitFace::init()
 
   // create tasks for all grid cells
 
+  grid_changed();
+}
+
+/* ----------------------------------------------------------------------
+   grid changed operation
+   invoke create_tasks() to rebuild entire task list
+   invoked after per-processor list of grid cells has changed
+------------------------------------------------------------------------- */
+
+void FixEmitFace::grid_changed()
+{
   create_tasks();
 
   // if Np > 0, nper = # of insertions per task
@@ -482,7 +493,7 @@ void FixEmitFace::perform_task_onepass()
   //   shift Maxwellian distribution by stream velocity component
   //   see Bird 1994, p 259, eq 12.5
 
-  int nfix_add_particle = modify->n_add_particle;
+  int nfix_update_custom = modify->n_update_custom;
 
   for (int i = 0; i < ntask; i++) {
     pcell = tasks[i].pcell;
@@ -545,8 +556,8 @@ void FixEmitFace::perform_task_onepass()
           p->flag = PINSERT;
           p->dtremain = dt * random->uniform();
 
-          if (nfix_add_particle)
-            modify->add_particle(particle->nlocal-1,temp_thermal,
+          if (nfix_update_custom)
+            modify->update_custom(particle->nlocal-1,temp_thermal,
                                  temp_rot,temp_vib,vstream);
 	}
 
@@ -604,8 +615,8 @@ void FixEmitFace::perform_task_onepass()
         p->flag = PINSERT;
         p->dtremain = dt * random->uniform();
 
-        if (nfix_add_particle)
-          modify->add_particle(particle->nlocal-1,temp_thermal,
+        if (nfix_update_custom)
+          modify->update_custom(particle->nlocal-1,temp_thermal,
                                temp_rot,temp_vib,vstream);
       }
 
@@ -653,7 +664,7 @@ void FixEmitFace::perform_task_twopass()
   //   shift Maxwellian distribution by stream velocity component
   //   see Bird 1994, p 259, eq 12.5
 
-  int nfix_add_particle = modify->n_add_particle;
+  int nfix_update_custom = modify->n_update_custom;
 
   int ninsert_dim1 = perspecies ? nspecies : 1;
   int** ninsert_values;
@@ -738,8 +749,8 @@ void FixEmitFace::perform_task_twopass()
           p->flag = PINSERT;
           p->dtremain = dt * random->uniform();
 
-          if (nfix_add_particle)
-            modify->add_particle(particle->nlocal-1,temp_thermal,
+          if (nfix_update_custom)
+            modify->update_custom(particle->nlocal-1,temp_thermal,
                 temp_rot,temp_vib,vstream);
         }
 
@@ -791,8 +802,8 @@ void FixEmitFace::perform_task_twopass()
         p->flag = PINSERT;
         p->dtremain = dt * random->uniform();
 
-        if (nfix_add_particle)
-          modify->add_particle(particle->nlocal-1,temp_thermal,
+        if (nfix_update_custom)
+          modify->update_custom(particle->nlocal-1,temp_thermal,
               temp_rot,temp_vib,vstream);
       }
 

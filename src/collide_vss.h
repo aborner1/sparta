@@ -97,10 +97,10 @@ class CollideVSS : public Collide {
                                    Particle::OnePart *,
                                    Particle::OnePart *);
 
-  double sample_bl(RanPark *, double, double);
-  double rotrel_serial (int, double);  
+  double sample_bl(RanKnuth *, double, double);
+  double rotrel_serial (int, double);
   double vibrel_serial (int, double);
-	double rotrel_prohibdouble (int, double);  
+  double rotrel_prohibdouble (int, double);
   double vibrel_prohibdouble (int, double, double);
 
   void read_param_file(char *);
