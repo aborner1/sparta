@@ -12,7 +12,7 @@ SHFLAGS =	-fPIC
 DEPFLAGS =	-M
 
 LINK =		mpic++
-LINKFLAGS =	-O
+LINKFLAGS =	-O3
 LIB =           
 SIZE =		size
 

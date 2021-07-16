@@ -55,7 +55,7 @@ class SurfCollideRadeq : public SurfCollide {
   int *cglobal;              // indices of global elements for nchoose
 
   double vstream[3];
-  class RanPark *random;     // RNG for particle reflection
+  class RanKnuth *random;     // RNG for particle reflection
 
   double radeq(Particle::OnePart *, double *, int);
 };
