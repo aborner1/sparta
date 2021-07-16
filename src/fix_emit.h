@@ -28,12 +28,12 @@ class FixEmit : public Fix {
   void start_of_step();
   double compute_vector(int);
 
-  void grid_changed();
+  virtual void grid_changed();
 
  protected:
   int perspecies;
   class Region *region;
-  class RanPark *random;
+  class RanKnuth *random;
   int nsingle,ntotal;
 
   int ntask;           // # of insert tasks in underlying child class
