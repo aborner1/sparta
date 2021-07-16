@@ -1,0 +1,13 @@
+#!MC 1410
+$!AlterData 
+  Equation = '{Tw}=(max({q},0)/(4.8198e-8))**(0.25)'
+$!AlterData 
+  Equation = '{M}=(V9*28.01+V10*44.01)*1e-3/IF({n}>0,{n},1)'
+$!AlterData 
+  Equation = '{hform}=(V9*0+V10*(-8.93288e6))/IF({n}>0,{n},1)'
+$!AlterData 
+  Equation = '{p/rho}={Tw}*8.31446261815324/IF({M}>0,{M},1)'
+$!AlterData 
+  Equation = '{etot}=1.5*{p/rho}+{eint}/IF({n}>0,{n},1)'
+$!AlterData 
+  Equation = '{htot}={p/rho}+{hform}+{etot}'

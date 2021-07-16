@@ -67,7 +67,7 @@ def read_points(sif, num_points, num_elements, ug, three_d_file):
 def read_elements(sif, num_points, num_elements, ug, three_d_file):
   num_items_per_line = 5
   if not three_d_file:
-    num_items_per_line = 3
+    num_items_per_line = 4
 
   if ug.GetNumberOfCells():
     print "Error reading SPARTA surf input file"
@@ -88,8 +88,8 @@ def read_elements(sif, num_points, num_elements, ug, three_d_file):
         ug.InsertNextCell(tri.GetCellType(), tri.GetPointIds());
       else:
         li = vtk.vtkLine()
-        i = int(s.split()[1])
-        j = int(s.split()[2])
+        i = int(s.split()[2])
+        j = int(s.split()[3])
         li.GetPointIds().SetId(0,i-1)
         li.GetPointIds().SetId(1,j-1)
         ug.InsertNextCell(li.GetCellType(), li.GetPointIds());

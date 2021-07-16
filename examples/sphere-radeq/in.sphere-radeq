@@ -1,0 +1,143 @@
+# advect particles on uniform Cartesian grid
+# single-step moves that cross grid cell boundaries are detected
+# particle effectively moves from cell to cell
+# particles reflect off global box boundaries
+
+###################################
+# Trajectory inputs
+###################################
+variable            V equal 2634.1
+variable            nden equal 8.494e19
+variable            temp equal 200
+variable            surftemp equal 500
+
+###################################
+# Simulation initialization standards
+###################################
+variable            ppc equal 1
+variable            cpmfp equal 1
+
+###################################
+# Parameter calculations
+###################################
+variable            mfp equal 1/(sqrt(2)*3.14159*(3.595e-10)^2*${nden}*(1000/${temp})^(0.24))
+
+variable            xmin equal -0.2
+variable            xmax equal 0.1524
+variable            ymin equal 0.0
+variable            ymax equal 0.2
+variable            zmin equal 0.0
+variable            zmax equal 0.2
+
+variable            xncells equal floor((${xmax}-${xmin})/${mfp}*${cpmfp})
+variable            yncells equal floor((${ymax}-${ymin})/${mfp}*${cpmfp})
+variable            zncells equal floor((${zmax}-${zmin})/${mfp}*${cpmfp})
+
+variable            Fnum equal  ${nden}*(${xmax}-${xmin})*(${ymax}-${ymin})*(${zmax}-${zmin})/${ppc}/${xncells}/${yncells}/${zncells}
+
+variable            tstep equal (-${xmin}+${xmax})/${V}/${xncells}/20
+
+###################################
+# Print variable values to log file
+###################################
+print               " Velocity  = ${V}"
+print               " Density  = ${nden}"
+print               " Temp  = ${temp}"
+print               " mean free path  = ${mfp}"
+print               " cells per free stream mean free path = ${cpmfp}"
+print               " x-min = ${xmin}"
+print               " x-max = ${xmax}"
+print               " y-min = ${ymin}"
+print               " y-max = ${ymax}"
+print               " z-min = ${zmin}"
+print               " z-max = ${zmax}"
+print               " x-cells = ${xncells}"
+print               " y-cells = ${yncells}"
+print               " z-cells = ${zncells}"
+print               " Simulation Ratio = ${Fnum}"
+print               " Timestep = ${tstep}"
+
+###################################
+# Simulation parameters
+###################################
+seed	    	    847384
+dimension   	    3
+global		    nrho ${nden} fnum ${Fnum} gridcut 0.01 comm/style all
+timestep            ${tstep}
+
+###################################
+# Grid generation
+###################################
+boundary	    o ro ro
+create_box          ${xmin} ${xmax} ${ymin} ${ymax} ${zmin} ${zmax}
+create_grid 	    ${xncells} ${yncells} ${zncells} block * * * 
+balance_grid        rcb cell
+
+#####################################
+# Gas/Collision Model Specification #
+#####################################
+species             ar.species Ar
+mixture             all vstream ${V} 0 0 temp ${temp}
+
+collide             vss all ar.vss
+collide_modify      vremax 2000 yes
+
+#####################################################
+# Surface generation and collision specification
+#####################################################
+read_surf	    data.sphere trans 0.1524 0 0 scale 0.1524 0.1524 0.1524 clip group 1
+write_surf          sphere-clipped.surf
+
+#surf_collide        1 diffuse ${surftemp} 1.0
+   
+compute             88 surf all all etot
+fix                 88 ave/surf all 1 500 500 c_88[*] ave one
+surf_collide        1 radeq ${surftemp} f_88[*] 0.89
+
+surf_modify         1 collide 1
+
+###################################
+# Boundary conditions
+###################################
+fix                 in emit/face all xlo
+
+###################################
+# Initialize simulation
+###################################
+create_particles    all n 0
+balance_grid        rcb part
+
+###################################
+# Unsteady Output
+###################################
+compute             1 grid all all nrho
+compute             2 thermal/grid all all temp
+fix                 1 ave/grid all 1 500 500 c_1[*] c_2[*] ave one
+
+compute             1b lambda/grid f_1[1] f_1[2] Ar kall
+
+fix                 10 adapt 500 all refine coarsen value c_1b[2] 0.8 1.6 &
+                    combine min thresh less more cells 2 2 2 maxlevel 5
+fix                 load balance 500 1.1 rcb time
+
+stats_style         step cpu np nattempt ncoll nreact nscoll ngrid maxlevel
+stats_modify        flush yes
+stats               100
+
+run                 2000
+quit
+###################################
+# Steady state Output
+###################################
+uncompute           1
+uncompute           2
+unfix               1
+uncompute           1b
+unfix               10
+
+# Surface pressure and heat flux
+compute             3 surf all all press etot
+fix                 3 ave/surf all 1 500 500 c_3[*] ave running
+dump                3 surf all 500 std_surf.* id f_3[*]
+
+run                 10000

@@ -1,0 +1,23 @@
+###################################
+# Simulation parameters
+###################################
+seed                12345
+dimension           3
+
+global              gridcut 1e-3 surfpush yes
+global              surfgrid percell surfmax 70000
+
+###################################
+# Grid generation
+###################################
+boundary            ro ro o
+create_box          0.0 0.2 0.0 0.2 -0.35 0.2
+create_grid         7 7 21
+
+balance_grid        rcb cell
+
+#####################################################
+# Surface generation and collision specification
+#####################################################
+read_surf           forebody-4-6-mm.surf group 1 scale 0.001 0.001 0.001 clip 1e-15
+write_surf          surf-open.out

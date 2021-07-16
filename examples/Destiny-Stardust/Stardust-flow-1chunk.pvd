@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<VTKFile type="Collection" version="0.1"
+               byte_order="LittleEndian"
+               compressor="vtkZLibDataCompressor">
+   <Collection>    
+    <DataSet timestep="100000" group="" part="0"   
+             file="Stardust-flow-1chunk/Stardust-flow-1chunk_100000.pvtu"/>
+   </Collection>    
+</VTKFile>    

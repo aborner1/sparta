@@ -1,0 +1,175 @@
+###################################
+# Trajectory inputs
+###################################
+variable            V equal 6000.0
+variable	    rho equal 1.13E-6
+variable            temp equal 195.5
+
+variable            surftemp equal 2500.0
+variable            beta equal 0
+
+###################################
+# Gas parameters (C02)
+###################################
+variable            mue equal 1.380E-5
+variable            mass equal 73.1E-27
+variable            gamma equal 1.28
+variable 	    nden equal ${rho}/${mass}
+
+###################################
+# Constants
+###################################
+variable            boltz equal 1.380658E-23
+variable            pi equal 3.14159
+
+###################################
+# Simulation initialization standards
+###################################
+variable            ppc equal 1000
+variable            cpmfp equal 1
+
+###################################
+# Parameter calculations
+###################################
+variable            Vx equal ${V}*cos(${beta}*2*PI/360)
+variable            Vy equal ${V}*sin(${beta}*2*PI/360)
+
+variable            cbar equal sqrt(8./${pi}*${boltz}*${temp}/${mass})
+variable            mfp equal 2*${mue}/(${nden}*${mass}*${cbar})
+variable            uspeed equal sqrt(${gamma}*${boltz}*${temp}/${mass})
+
+variable            xmin equal 0
+variable            xmax equal 8
+variable            ymin equal 0
+variable            ymax equal 7
+variable 	    zmin equal 0
+variable 	    zmax equal 7
+
+variable            xncells equal 50
+#ceil((${xmax}-${xmin})/${mfp}*${cpmfp})
+variable            yncells equal 50
+#ceil((${ymax}-${ymin})/${mfp}*${cpmfp})
+variable	    zncells equal 50
+#ceil((${zmax}-${zmin})/${mfp}*${cpmfp})
+
+variable            Fnum equal 1e15
+
+# ${nden}*(${xmax}-${xmin})*(${ymax}-${ymin})*(${zmax}-${zmin})/${ppc}/${xncells}/${yncells}/${zncells}
+
+variable 	    partRatio equal ${nden}/${Fnum}
+
+variable            tstep equal (-${xmin}+${xmax})/${Vx}/${xncells}/200
+
+###################################
+# Print variable values to log file
+###################################
+print               " Velocity  = ${V}"
+print               " Density  = ${rho}"
+print               " Angle of attack  = ${beta}"
+print               " X-Velocity  = ${Vx}"
+print               " Y-Velocity  = ${Vy}"
+print               " Density  = ${nden}"
+print               " Temp  = ${temp}"
+print               " cbar  = ${cbar}"
+print               " mean free path  = ${mfp}"
+print               " cells per free stream mean free path = ${cpmfp}"
+print               " sound speed  = ${uspeed}"
+print               " x-min = ${xmin}"
+print               " x-max = ${xmax}"
+print               " y-min = ${ymin}"
+print               " y-max = ${ymax}"
+print               " x-cells = ${xncells}"
+print               " y-cells = ${yncells}"
+print               " Simulation Ratio = ${Fnum}"
+print               " Timestep = ${tstep}"
+print 		    " Fum = ${Fnum}"
+print 		    " Nrho = ${nden}"
+print		    " Nrho/Fnum = ${partRatio}"
+
+###################################
+# Simulation parameters
+###################################
+seed	    	    847384
+dimension   	    3
+global		    nrho ${nden} fnum ${Fnum} gridcut 1e-6 comm/style all
+timestep            ${tstep}
+
+###################################
+# Grid generation
+###################################
+boundary	    o o o
+create_box          ${xmin} ${xmax} ${ymin} ${ymax} ${zmin} ${zmax}
+create_grid 	    ${xncells} ${yncells} ${zncells} block * * * 
+#global              weight cell radius
+global 	 	    cellmax 200
+global 		    surfmax 200
+
+#####################################
+# Gas/Collision Model Specification #
+#####################################
+species             mars.species N2 CO2 N NO O2 O CO C2 CN C O2+ O+ N+ NO+ CO+ C+ e
+mixture             species copy noelectron
+mixture             noelectron delete e
+
+mixture		    O2p O2+
+mixture		    Op O+
+mixture 	    Np N+
+mixture 	    NOp NO+
+mixture		    COp CO+
+mixture 	    Cp C+
+
+mixture             noelectron vstream ${Vx} ${Vy} 0.0 temp ${temp}
+mixture             noelectron CO2 frac 0.96
+mixture             noelectron N2  frac 0.04
+
+#####################################################
+# Surface generation and collision specification
+#####################################################
+read_surf           D10.sphere group 1
+
+surf_collide        1 diffuse ${surftemp} 1.0
+surf_react          1 prob catalytic.surf
+surf_modify         1 collide 1 react 1
+
+fix                 ambi ambipolar e CO+ O+ N+ NO+ O2+ C+
+
+collide             vss species mars.vss relax variable
+collide_modify      vremax 20000 yes vibrate smooth rotate smooth
+
+react               tce mars.tce
+
+###################################
+# Boundary conditions
+###################################
+fix                 in emit/face noelectron xlo 
+
+###################################
+# Initialize simulation
+###################################
+create_particles    noelectron n 0
+
+###################################
+# Unsteady Output
+###################################
+compute             2 grid all species nrho
+
+stats_style         step cpu np nattempt ncoll nreact nscoll nparent nchild maxlevel
+
+stats_modify        flush yes
+
+write_grid          parent grid.out
+
+collide_modify      vremax 50000 yes
+fix                 load balance 10000 1.1 rcb time
+
+###################################
+# Steady state Output
+###################################
+compute             1 grid all COp n nrho tvib
+
+fix                 1 ave/grid all 10 10000 100000 c_1[*] ave running
+dump                1 grid all 100000 std_species.* id vol f_1[*]
+
+stats		    10000
+run                 100000
+
