@@ -380,15 +380,6 @@ template < int DIM, int SURF > void Update::move()
   Surf::Tri *tris = surf->tris;
   Surf::Line *lines = surf->lines;
   double dt = update->dt;
-  int notfirst = 0;
-   
-  if((ntimestep > 1000) && ((ntimestep-1) % 1000 == 0))
-   {
-   for (int i = 0; i < surf->nsurf; i++) heatflux[i] = heatflux2[i] = 0.0;
-   for (int i = 0; i < nchoose; i++) heatflux[cglobal[i]] = modify->fix[2]->vector_surf[i];
-   MPI_Barrier(world);
-   MPI_Allreduce(heatflux,heatflux2,surf->nsurf,MPI_DOUBLE,MPI_SUM,world);
-   }
 
   // DEBUG
 
@@ -403,8 +394,7 @@ template < int DIM, int SURF > void Update::move()
     nmigrate = 0;
     entryexit = 0;
 
-    if (notfirst == 0) {
-      notfirst = 1;
+    if (niterate == 1) {
       pstart = 0;
       pstop = nlocal;
     }
