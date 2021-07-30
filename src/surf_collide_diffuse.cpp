@@ -230,8 +230,8 @@ void SurfCollideDiffuse::diffuse(Particle::OnePart *p, double *norm)
   } else {
     double tangent1[3],tangent2[3];
     Particle::Species *species = particle->species;
-    int ispecies = p->ispecies;  
-
+    int ispecies = p->ispecies;
+    
     double vrm = sqrt(2.0*update->boltz * twall / species[ispecies].mass);
     double vperp = vrm * sqrt(-log(random->uniform()));
 

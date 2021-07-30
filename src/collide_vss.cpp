@@ -467,7 +467,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *ip,
       double rotn_phi = 1.0/species[sp].rotrel;
 
       if (rotdof) {
-        if (relaxflag == VARIABLE) rotn_phi = 1.0/rotrel_serial(sp,E_Dispose);
+        if (relaxflag == VARIABLE) rotn_phi = 1.0/rotrel_serial(sp,E_Dispose+p->erot);
         if (rotn_phi >= random->uniform()) {
           if (rotstyle == NONE) {
             p->erot = 0.0;
@@ -616,7 +616,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
 
           sp = p->ispecies;
           vibdof = species[sp].vibdof;
-          transdof = 5.0-2.0*params[ip->ispecies][jp->ispecies].omega;
+          transdof = 5.0-2.0*params[sp][sp].omega;
 
           Tt = (E_Dispose+p->evib) / (update->boltz * (transdof+vibdof));
 
@@ -634,11 +634,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
                   if (phi >= random->uniform()) {
                       E_Dispose += p->evib;
                       if (vibdof == 2) {
-                          Fraction_Vib = 1.0 - pow(random->uniform(),(1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+                          Fraction_Vib = 1.0 - pow(random->uniform(),(1.0/(2.5-params[sp][sp].omega)));
                           p->evib= Fraction_Vib * E_Dispose;
                       }
                       else if (vibdof > 2) p->evib = E_Dispose * 
-			      sample_bl(random,0.5*vibdof-1.0,1.5-params[ip->ispecies][jp->ispecies].omega);
+			      sample_bl(random,0.5*vibdof-1.0,1.5-params[sp][sp].omega);
                       E_Dispose -= p->evib;
                       postcoln.evib += p->evib;
                       relaxflag1 = 1;
@@ -665,7 +665,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
                               (random->uniform()*(max_level+AdjustFactor));
                             p->evib = ivib * update->boltz * species[sp].vibtemp[0];
                             State_prob = pow((1.0 - p->evib / E_Dispose),
-                                             (1.5 - params[ip->ispecies][jp->ispecies].omega));
+                                             (1.5 - params[sp][sp].omega));
                           } while (State_prob < random->uniform());
                           E_Dispose -= p->evib;
                           postcoln.evib += p->evib;
@@ -705,7 +705,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
                                 (random->uniform()*(max_level+AdjustFactor));
                               pevib = ivib * update->boltz * species[sp].vibtemp[imode];
                               State_prob = pow((1.0 - pevib / E_Dispose),
-                                               (1.5 - params[ip->ispecies][jp->ispecies].omega));
+                                               (1.5 - params[sp][sp].omega));
                             } while (State_prob < random->uniform());
 
                             vibmode[pindex][imode] = ivib;
@@ -732,7 +732,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
 
           sp = p->ispecies;
           rotdof = species[sp].rotdof;
-          transdof = 5.0-2.0*params[ip->ispecies][jp->ispecies].omega;
+          transdof = 5.0-2.0*params[sp][sp].omega;
 
           if (rotdof) {
             if (rotstyle == NONE) {
@@ -746,11 +746,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
                 if (phi >= random->uniform()) {
                     E_Dispose += p->erot;
                     if (rotdof == 2) {
-                        Fraction_Vib = 1.0 - pow(random->uniform(),(1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+                        Fraction_Vib = 1.0 - pow(random->uniform(),(1.0/(2.5-params[sp][sp].omega)));
                         p->erot= Fraction_Vib * E_Dispose;
                     }
                     else if (rotdof > 2) p->erot = E_Dispose * 
-			    sample_bl(random,0.5*rotdof-1.0,1.5-params[ip->ispecies][jp->ispecies].omega);
+			    sample_bl(random,0.5*rotdof-1.0,1.5-params[sp][sp].omega);
                     E_Dispose -= p->erot;
                     postcoln.erot += p->erot;
                     break;
