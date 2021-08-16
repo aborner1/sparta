@@ -33,7 +33,8 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{NONE,DISCRETE,SMOOTH};            // several files
-enum{CONSTANT,VARIABLE};
+enum{CONSTANT,PARKER};
+enum{CONSTANT,MILWHITE,MILWHITEHIGHT};
 
 #define MAXLINE 1024
 
@@ -46,16 +47,23 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
 
   // optional args
 
-  relaxflag = CONSTANT;
+  rotrelaxflag = vibrelaxflag = CONSTANT;
 
   int iarg = 3;
   while (iarg < narg) {
-    if (strcmp(arg[iarg],"relax") == 0) {
+    if (strcmp(arg[iarg],"rotrelax") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
-      if (strcmp(arg[iarg+1],"constant") == 0) relaxflag = CONSTANT;
-      else if (strcmp(arg[iarg+1],"variable") == 0) relaxflag = VARIABLE;
+      if (strcmp(arg[iarg+1],"constant") == 0) rotrelaxflag = CONSTANT;
+      else if (strcmp(arg[iarg+1],"parker") == 0) rotrelaxflag = PARKER;
       else error->all(FLERR,"Illegal collide command");
       iarg += 2;
+    } else if (strcmp(arg[iarg],"vibrelax") == 0) {
+        if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
+        if (strcmp(arg[iarg+1],"constant") == 0) vibrelaxflag = CONSTANT;
+        else if (strcmp(arg[iarg+1],"mil_white") == 0) vibrelaxflag = MILWHITE;
+        else if (strcmp(arg[iarg+1],"mil_white_high_T") == 0) vibrelaxflag = MILWHITEHIGHT;
+        else error->all(FLERR,"Illegal collide command");
+        iarg += 2;
     } else error->all(FLERR,"Illegal collide command");
   }
 
@@ -458,7 +466,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
       double rotn_phi = species[sp].rotrel;
 
       if (rotdof) {
-        if (relaxflag == VARIABLE) rotn_phi = (1.0 + rotdof/transdof)*rotrel(sp,E_Dispose+p->erot);
+        if (rotrelaxflag == PARKER) rotn_phi = (1.0 + rotdof/transdof)*rotrel_parker(sp,E_Dispose+p->erot);
         if (rotn_phi >= random->uniform()) {
           if (rotstyle == NONE) {
             p->erot = 0.0;
@@ -484,7 +492,8 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
       double vibn_phi = species[sp].vibrel[0];
 
       if (vibdof) {
-        if (relaxflag == VARIABLE) vibn_phi = (1.0 + vibdof/transdof)*vibrel(sp,E_Dispose+p->evib);
+        if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite(sp,E_Dispose+p->evib);
+        else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite_highT(sp,E_Dispose+p->evib);
         if (vibn_phi >= random->uniform()) {
           if (vibstyle == NONE) {
             p->evib = 0.0;
@@ -778,11 +787,11 @@ double CollideVSS::sample_bl(RanKnuth *random, double Exp_1, double Exp_2)
   return x;
 }
 
-/* ----------------------------------------------------------------------
-   compute a variable rotational relaxation parameter
-------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   compute a variable rotational relaxation parameter using Parker's formula
+------------------------------------------------------------------------------ */
 
-double CollideVSS::rotrel(int isp, double Ec)
+double CollideVSS::rotrel_parker(int isp, double Ec)
 {
   // Because we are only relaxing one of the particles in each call, we only
   //  include its DoF, consistent with Bird 2013 (3.32)
@@ -793,11 +802,30 @@ double CollideVSS::rotrel(int isp, double Ec)
   return rotphi;
 }
 
-/* ----------------------------------------------------------------------
-   compute a variable vibrational relaxation parameter
-------------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------------------
+   compute a variable vibrational relaxation parameter using Millikan-White's expression
+----------------------------------------------------------------------------------------- */
 
-double CollideVSS::vibrel(int isp, double Ec)
+double CollideVSS::vibrel_milwhite(int isp, double Ec)
+{
+  Particle::Species *species = particle->species;
+  double Tr = Ec /(update->boltz * (3.5-params[isp][isp].omega));
+  double omega = params[isp][isp].omega;
+  double diam = params[isp][isp].diam;
+  double tref = params[isp][isp].tref;
+  double Zmw = 4.0 * MY_PIS * pow(diam,2.0) * pow(tref,omega-0.5)
+                  * pow(Tr,-omega) * 101325.0 * exp(params[isp][isp].vibc1
+                  * (pow(Tr,-1.0/3.0) - params[isp][isp].vibc2) - 18.42) /
+                  sqrt(species[isp].mass * update->boltz);
+  double vibphi = 1.0 / Zmw;
+  return vibphi;
+}
+
+/* --------------------------------------------------------------------------------------
+   compute a variable vibrational relaxation parameter using Millikan-White's expression
+   + Park's high temperature correction
+----------------------------------------------------------------------------------------- */
+double CollideVSS::vibrel_milwhite_highT(int isp, double Ec)
 {
   Particle::Species *species = particle->species;
   double Tr = Ec /(update->boltz * (3.5-params[isp][isp].omega));
@@ -847,7 +875,10 @@ void CollideVSS::read_param_file(char *fname)
   // all other lines must have at least REQWORDS, which depends on VARIABLE flag
 
   int REQWORDS = 5;
-  if (relaxflag == VARIABLE) REQWORDS = 10;
+  if (rotrelaxflag == PARKER) REQWORDS += 2;
+  if (vibrelaxflag == MILWHITE) REQWORDS += 2;
+  else if (vibrelaxflag == MILWHITEHIGHT) REQWORDS += 3;
+
   char **words = new char*[REQWORDS+1]; // one extra word in cross-species lines
   char line[MAXLINE];
   int isp,jsp;
@@ -874,14 +905,17 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][isp].omega = atof(words[2]);
       params[isp][isp].tref = atof(words[3]);
       params[isp][isp].alpha = atof(words[4]);
-      if (relaxflag == VARIABLE) {
+      if (rotrelaxflag == PARKER) {
         params[isp][isp].rotc1 = atof(words[5]);
         params[isp][isp].rotc2 = atof(words[6]);
+      }
+      if ((vibrelaxflag == MILWHITE) || (vibrelaxflag == MILWHITEHIGHT)) {
         params[isp][isp].rotc3 = (MY_PI+MY_PI2*MY_PI2)*params[isp][isp].rotc2;
         params[isp][isp].rotc2 = (MY_PI*MY_PIS/2.)*sqrt(params[isp][isp].rotc2);
         params[isp][isp].vibc1 = atof(words[7]);
         params[isp][isp].vibc2 = atof(words[8]);
-        params[isp][isp].park = atof(words[9]);
+      }
+      if (vibrelaxflag == MILWHITEHIGHT) params[isp][isp].park = atof(words[9]);
       }
     }else {
       if (nwords < REQWORDS+1)  // one extra word in cross-species lines
@@ -890,7 +924,7 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][jsp].omega = params[jsp][isp].omega = atof(words[3]);
       params[isp][jsp].tref = params[jsp][isp].tref = atof(words[4]);
       params[isp][jsp].alpha = params[jsp][isp].alpha = atof(words[5]);
-      if (relaxflag == VARIABLE) {
+      if (rotrelaxflag == PARKER) {
         params[isp][jsp].rotc1 = params[jsp][isp].rotc1 = atof(words[6]);
         params[isp][jsp].rotc2 = atof(words[7]);
         params[isp][jsp].rotc3 = params[jsp][isp].rotc3 =
@@ -898,9 +932,12 @@ void CollideVSS::read_param_file(char *fname)
         if(params[isp][jsp].rotc2 > 0)
         	params[isp][jsp].rotc2 = params[jsp][isp].rotc2 =
         			(MY_PI*MY_PIS/2.)*sqrt(params[isp][jsp].rotc2);
+      }
+      if ((vibrelaxflag == MILWHITE) || (vibrelaxflag == MILWHITEHIGHT)) {
         params[isp][jsp].vibc1 = params[jsp][isp].vibc1= atof(words[8]);
         params[isp][jsp].vibc2 = params[jsp][isp].vibc2= atof(words[9]);
-        params[isp][jsp].park = params[jsp][isp].park= atof(words[10]);
+      }
+      if (vibrelaxflag == MILWHITEHIGHT) params[isp][jsp].park = params[jsp][isp].park= atof(words[10]);
       }
     }
   }
@@ -934,17 +971,21 @@ void CollideVSS::read_param_file(char *fname)
       if(params[i][j].alpha < 0) params[i][j].alpha = params[j][i].alpha =
 				   0.5*(params[i][i].alpha + params[j][j].alpha);
 
-      if (relaxflag == VARIABLE) {
+      if (relaxflag == PARKER) {
 	if(params[i][j].rotc1 < 0) params[i][j].rotc1 = params[j][i].rotc1 =
 				     0.5*(params[i][i].rotc1 + params[j][j].rotc1);
 	if(params[i][j].rotc2 < 0) params[i][j].rotc2 = params[j][i].rotc2 =
 				     0.5*(params[i][i].rotc2 + params[j][j].rotc2);
 	if(params[i][j].rotc3 < 0) params[i][j].rotc3 = params[j][i].rotc3 =
 				     0.5*(params[i][i].rotc3 + params[j][j].rotc3);
+      }
+      if ((vibrelaxflag == MILWHITE) || (vibrelaxflag == MILWHITEHIGHT)) {
 	if(params[i][j].vibc1 < 0) params[i][j].vibc1 = params[j][i].vibc1 =
 				     0.5*(params[i][i].vibc1 + params[j][j].vibc1);
 	if(params[i][j].vibc2 < 0) params[i][j].vibc2 = params[j][i].vibc2 =
 				     0.5*(params[i][i].vibc2 + params[j][j].vibc2);
+      }
+      if (vibrelaxflag == MILWHITEHIGHT)
         if(params[i][j].park < 0) params[i][j].park = params[j][i].park =
                                      0.5*(params[i][i].park + params[j][j].park);
       }
