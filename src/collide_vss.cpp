@@ -426,7 +426,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
 						Particle::OnePart *jp)
 {
 
-  double State_prob,Fraction_Rot,Fraction_Vib,E_Dispose;
+  double State_prob,Fraction_Rot,Fraction_Vib,E_Dispose,transdof;
   int i,rotdof,vibdof,max_level,ivib,irot;
 
   Particle::OnePart *p;
@@ -453,11 +453,12 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
       else p = jp;
 
       int sp = p->ispecies;
+      transdof = 5.0-2.0*params[sp][sp].omega;
       rotdof = species[sp].rotdof;
       double rotn_phi = species[sp].rotrel;
 
       if (rotdof) {
-        if (relaxflag == VARIABLE) rotn_phi = rotrel(sp,E_Dispose+p->erot);
+        if (relaxflag == VARIABLE) rotn_phi = (1.0 + rotdof/transdof)*rotrel(sp,E_Dispose+p->erot);
         if (rotn_phi >= random->uniform()) {
           if (rotstyle == NONE) {
             p->erot = 0.0;
@@ -483,7 +484,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
       double vibn_phi = species[sp].vibrel[0];
 
       if (vibdof) {
-        if (relaxflag == VARIABLE) vibn_phi = vibrel(sp,E_Dispose+p->evib);
+        if (relaxflag == VARIABLE) vibn_phi = (1.0 + vibdof/transdof)*vibrel(sp,E_Dispose+p->evib);
         if (vibn_phi >= random->uniform()) {
           if (vibstyle == NONE) {
             p->evib = 0.0;
@@ -798,9 +799,13 @@ double CollideVSS::rotrel(int isp, double Ec)
 
 double CollideVSS::vibrel(int isp, double Ec)
 {
+  Particle::Species *species = particle->species;
   double Tr = Ec /(update->boltz * (3.5-params[isp][isp].omega));
-  double vibphi = 1.0 / (params[isp][isp].vibc1/pow(Tr,params[isp][isp].omega) *
-                         exp(params[isp][isp].vibc2/pow(Tr,1.0/3.0)));
+  double Zmw = params[isp][isp].vibc1/pow(Tr,params[isp][isp].omega) *
+                exp(params[isp][isp].vibc2/pow(Tr,1.0/3.0));
+  double Zpark = 4.0*MY_PI*pow(params[isp][isp].diam,2.0)*pow(params[isp][isp].tref,params[isp][isp].omega-0.5)
+                 *pow(Tr,2.5-params[isp][isp].omega)/(2.5e9*params[isp][isp].park);
+  double vibphi = 1.0 / (Zmw + Zpark);
   return vibphi;
 }
 
@@ -828,7 +833,7 @@ void CollideVSS::read_param_file(char *fname)
     for ( int j = i+1; j<nparams; j++) {
       params[i][j].diam = params[i][j].omega = params[i][j].tref = -1.0;
       params[i][j].alpha = params[i][j].rotc1 = params[i][j].rotc2 = -1.0;
-      params[i][j].rotc3 = params[i][j].vibc1 = params[i][j].vibc2 = -1.0;
+      params[i][j].rotc3 = params[i][j].vibc1 = params[i][j].vibc2 = params[i][j].park = -1.0;
     }
   }
 
@@ -837,7 +842,7 @@ void CollideVSS::read_param_file(char *fname)
   // all other lines must have at least REQWORDS, which depends on VARIABLE flag
 
   int REQWORDS = 5;
-  if (relaxflag == VARIABLE) REQWORDS = 9;
+  if (relaxflag == VARIABLE) REQWORDS = 10;
   char **words = new char*[REQWORDS+1]; // one extra word in cross-species lines
   char line[MAXLINE];
   int isp,jsp;
@@ -871,6 +876,7 @@ void CollideVSS::read_param_file(char *fname)
         params[isp][isp].rotc2 = (MY_PI*MY_PIS/2.)*sqrt(params[isp][isp].rotc2);
         params[isp][isp].vibc1 = atof(words[7]);
         params[isp][isp].vibc2 = atof(words[8]);
+        params[isp][isp].park = atof(words[9]);
       }
     }else {
       if (nwords < REQWORDS+1)  // one extra word in cross-species lines
@@ -889,6 +895,7 @@ void CollideVSS::read_param_file(char *fname)
         			(MY_PI*MY_PIS/2.)*sqrt(params[isp][jsp].rotc2);
         params[isp][jsp].vibc1 = params[jsp][isp].vibc1= atof(words[8]);
         params[isp][jsp].vibc2 = params[jsp][isp].vibc2= atof(words[9]);
+        params[isp][jsp].park = params[jsp][isp].park= atof(words[10]);
       }
     }
   }
@@ -933,6 +940,8 @@ void CollideVSS::read_param_file(char *fname)
 				     0.5*(params[i][i].vibc1 + params[j][j].vibc1);
 	if(params[i][j].vibc2 < 0) params[i][j].vibc2 = params[j][i].vibc2 =
 				     0.5*(params[i][i].vibc2 + params[j][j].vibc2);
+        if(params[i][j].park < 0) params[i][j].park = params[j][i].park =
+                                     0.5*(params[i][i].park + params[j][j].park);
       }
     }
   }

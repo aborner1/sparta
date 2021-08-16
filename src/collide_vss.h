@@ -70,6 +70,7 @@ class CollideVSS : public Collide {
     double vibc1;
     double vibc2;
     double mr;
+    double park;
   };
 
  protected:
