@@ -74,7 +74,7 @@ class CollideVSS : public Collide {
   };
 
  protected:
-  int relaxflag,eng_exchange;
+  int rotrelaxflag,vibrelaxflag,eng_exchange;
   double vr_indice;
   double **prefactor; // static portion of collision attempt frequency
 
@@ -96,8 +96,9 @@ class CollideVSS : public Collide {
                                    Particle::OnePart *);
 
   double sample_bl(RanKnuth *, double, double);
-  double rotrel (int, double);
-  double vibrel (int, double);
+  double rotrel_parker (int, double);
+  double vibrel_milwhite (int, double);
+  double vibrel_milwhite_highT (int, double);
 
   void read_param_file(char *);
   int wordparse(int, char *, char **);

@@ -33,8 +33,8 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{NONE,DISCRETE,SMOOTH};            // several files
-enum{CONSTANT,PARKER};
-enum{CONSTANT,MILWHITE,MILWHITEHIGHT};
+enum{CONSTANTROT,PARKER};
+enum{CONSTANTVIB,MILWHITE,MILWHITEHIGHT};
 
 #define MAXLINE 1024
 
@@ -47,19 +47,20 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
 
   // optional args
 
-  rotrelaxflag = vibrelaxflag = CONSTANT;
+  rotrelaxflag = CONSTANTROT;
+  vibrelaxflag = CONSTANTVIB;
 
   int iarg = 3;
   while (iarg < narg) {
     if (strcmp(arg[iarg],"rotrelax") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
-      if (strcmp(arg[iarg+1],"constant") == 0) rotrelaxflag = CONSTANT;
+      if (strcmp(arg[iarg+1],"constant") == 0) rotrelaxflag = CONSTANTROT;
       else if (strcmp(arg[iarg+1],"parker") == 0) rotrelaxflag = PARKER;
       else error->all(FLERR,"Illegal collide command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"vibrelax") == 0) {
         if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
-        if (strcmp(arg[iarg+1],"constant") == 0) vibrelaxflag = CONSTANT;
+        if (strcmp(arg[iarg+1],"constant") == 0) vibrelaxflag = CONSTANTVIB;
         else if (strcmp(arg[iarg+1],"mil_white") == 0) vibrelaxflag = MILWHITE;
         else if (strcmp(arg[iarg+1],"mil_white_high_T") == 0) vibrelaxflag = MILWHITEHIGHT;
         else error->all(FLERR,"Illegal collide command");
@@ -916,7 +917,6 @@ void CollideVSS::read_param_file(char *fname)
         params[isp][isp].vibc2 = atof(words[8]);
       }
       if (vibrelaxflag == MILWHITEHIGHT) params[isp][isp].park = atof(words[9]);
-      }
     }else {
       if (nwords < REQWORDS+1)  // one extra word in cross-species lines
         error->one(FLERR,"Incorrect line format in VSS parameter file");
@@ -938,7 +938,6 @@ void CollideVSS::read_param_file(char *fname)
         params[isp][jsp].vibc2 = params[jsp][isp].vibc2= atof(words[9]);
       }
       if (vibrelaxflag == MILWHITEHIGHT) params[isp][jsp].park = params[jsp][isp].park= atof(words[10]);
-      }
     }
   }
 
@@ -971,7 +970,7 @@ void CollideVSS::read_param_file(char *fname)
       if(params[i][j].alpha < 0) params[i][j].alpha = params[j][i].alpha =
 				   0.5*(params[i][i].alpha + params[j][j].alpha);
 
-      if (relaxflag == PARKER) {
+      if (rotrelaxflag == PARKER) {
 	if(params[i][j].rotc1 < 0) params[i][j].rotc1 = params[j][i].rotc1 =
 				     0.5*(params[i][i].rotc1 + params[j][j].rotc1);
 	if(params[i][j].rotc2 < 0) params[i][j].rotc2 = params[j][i].rotc2 =
@@ -988,7 +987,6 @@ void CollideVSS::read_param_file(char *fname)
       if (vibrelaxflag == MILWHITEHIGHT)
         if(params[i][j].park < 0) params[i][j].park = params[j][i].park =
                                      0.5*(params[i][i].park + params[j][j].park);
-      }
     }
   }
 }
