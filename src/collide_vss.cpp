@@ -801,10 +801,15 @@ double CollideVSS::vibrel(int isp, double Ec)
 {
   Particle::Species *species = particle->species;
   double Tr = Ec /(update->boltz * (3.5-params[isp][isp].omega));
-  double Zmw = params[isp][isp].vibc1/pow(Tr,params[isp][isp].omega) *
-                exp(params[isp][isp].vibc2/pow(Tr,1.0/3.0));
-  double Zpark = 4.0*MY_PI*pow(params[isp][isp].diam,2.0)*pow(params[isp][isp].tref,params[isp][isp].omega-0.5)
-                 *pow(Tr,2.5-params[isp][isp].omega)/(2.5e9*params[isp][isp].park);
+  double omega = params[isp][isp].omega;
+  double diam = params[isp][isp].diam;
+  double tref = params[isp][isp].tref;
+  double Zmw = 4.0 * MY_PIS * pow(diam,2.0) * pow(tref,omega-0.5)
+                  * pow(Tr,-omega) * 101325.0 * exp(params[isp][isp].vibc1
+                  * (pow(Tr,-1.0/3.0) - params[isp][isp].vibc2) - 18.42) /
+                  sqrt(species[isp].mass * update->boltz);
+  double Zpark = 4.0 * MY_PI * pow(diam,2.0) * pow(tref,omega-0.5)
+                 * pow(Tr,omega) / (2.5e9 * params[isp][isp].park);
   double vibphi = 1.0 / (Zmw + Zpark);
   return vibphi;
 }
