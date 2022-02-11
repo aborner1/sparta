@@ -181,6 +181,13 @@ char *SurfReactProb::reactionID(int m)
 
 /* ---------------------------------------------------------------------- */
 
+double SurfReactProb::reaction_coeff(int m)
+{
+  return rlist[m].coeff[1];
+}
+
+/* ---------------------------------------------------------------------- */
+
 int SurfReactProb::match_reactant(char *species, int m)
 {
   for (int i = 0; i < rlist[m].nreactant; i++)
@@ -407,7 +414,7 @@ void SurfReactProb::readfile(char *fname)
     if (word[0] == 'S' || word[0] == 's') r->style = SIMPLE;
     else error->all(FLERR,"Invalid reaction style in file");
 
-    if (r->style == SIMPLE) r->ncoeff = 1;
+    if (r->style == SIMPLE) r->ncoeff = 2;
 
     for (int i = 0; i < r->ncoeff; i++) {
       word = strtok(NULL," \t\n");
