@@ -25,7 +25,7 @@ mixture		    air N2 vstream 0.0 0.0 0.0 temp 10000.0 trot 100.0
 global              nrho 7.07043E22
 global              fnum 7.07043E5
 
-collide		    vss air n2.vss relax constant
+collide		    vss air n2.vss rotrelax constant vibrelax constant
 
 create_particles    air n 1000000 twopass
 

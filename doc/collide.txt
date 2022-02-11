@@ -22,15 +22,17 @@ args = arguments for that style :l
     mix-ID = ID of mixture to use for group definitions
     file = filename that lists species with their VSS model parameters :pre
 zero or more keyword/value pairs may be appended :l
-keyword = {relax} :l
-  {relax} value = {constant} or {variable} :pre
+keyword = {rotrelax} :l
+  {relax} value = {constant} or {parker} :pre
+keyword = {vibrelax} :l
+  {relax} value = {constant} or {mil_white} or {mil_white_high_T} :pre
 :ule
 
 [Examples:]
 
 collide none
 collide vss all ../data/air.vss
-collide vss species all.vss relax variable :pre
+collide vss species all.vss rotrelax parker vibrelax mil_white :pre
 
 [Description:]
 
@@ -124,7 +126,7 @@ the file.  Comment lines start with a "#" character.  All other lines
 must have the following format with parameters separated by
 whitespace.
 
-If the {relax} keyword is specified as {constant}, which is the
+If the {rotrelax} and {vibrelax} keywords are specified as {constant}, which is the
 default, then each line has 4 parameters following the species ID:
 
 species-ID diam omega tref alpha :pre
@@ -150,13 +152,19 @@ collision is treated in the same constant manner for every collision,
 using the rotational and vibrational relaxation numbers from the
 species data file, as read by the "species"_species.html command.
 
-If the {relax} keyword is specified as {variable}, then each line has
-8 parameters following the species ID:
+If the {rotrelax} keyword is specified as {parker}, then each line has
+2 more parameters following the species ID:
 
-species-ID diam omega tref alpha Zrotinf T* C1 C2 :pre
+species-ID diam omega tref alpha Zrotinf T* :pre
+
+Moreover, if the {vibrelax} keyword is specified as {mil_white}, then each line has
+2 more parameters following the species ID, and if it is specified as {mil_white_high_T},
+then each line has 3 more parameters:
+
+species-ID diam omega tref alpha Zrotinf T* A B Park :pre
 
 The first 4 parameters are the same as above.  Parameters 5 and 6
-affect rotational relaxation; parameters 7 and 8 affect vibrational
+affect rotational relaxation; parameters 7, 8 and 9 affect vibrational
 relaxation.  In this case the rotational and vibrational relaxation
 during a collision is treated as a variable and is computed for each
 collision.  This calculation is only performed for polyatomic species,
@@ -164,16 +172,19 @@ using equations A5 and A6 on pages 413 and 414 in "(Bird94)"_#Bird94,
 with the modification that the collision temperature is calculated
 using energy in the internal mode as well as the translational mode.
 Zrotinf and T* are parameters in the numerator and denominator of eq
-A5.  C1 and C2 are in eq A6.  The units of these parameters is as
+A5.  A and B come from the Millikan-White expression, while the park value
+implements a temperature at high temperature so that the vibrational relaxation
+number does not exceed the rotational one.  The units of these parameters is as
 follows:
 
 Zrotinf (unitless)
 T* (temperature units)
-C1 (temperature units)
-C2 (temperature^(1/3) units) :ul
+A (temperature units)
+B (temperature^(1/3) units)
+Park (unitless) :ul
 
 Note that a collision data file with the 4 extra relaxation parameters
-(per species) can be used when the {relax} keyword is specified as
+(per species) can be used when the {rotrelax} and {vibrelax} keywords are not specified as
 {constant}.  In that case, the extra parameters are simply ignored.
 
 For interspecies collisions, the collision parameters default to
@@ -181,18 +192,18 @@ the average of the parameters for each involved species.  To override
 this default, lines specific to each interspecies pair can be added
 anywhere in the collision data file.  The format for these lines is as
 described above, with the addition of a second species name.  For
-example, with the {relax} keyword specified, an interspecies
+example, with the {rotrelax} and {vibrelax} keywords specified, an interspecies
 collision line would contain the following information for collisions
 between species-ID and species-ID1:
 
-species-ID species-ID1 diam omega tref alpha Zrotinf T* C1 C2 :pre
+species-ID species-ID1 diam omega tref alpha Zrotinf T* A B park :pre
 
 In an interspecies line, a specific parameter can be returned to the
 default behavior (an average) by making it negative.  For example, to
 override only {omega} for the above case, the line could appear as
 follows:
 
-species-ID species-ID1 -1 omega -1 -1 -1 -1 -1 -1 :pre
+species-ID species-ID1 -1 omega -1 -1 -1 -1 -1 -1 -1 :pre
 
 
 :line
