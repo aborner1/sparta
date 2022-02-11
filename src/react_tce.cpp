@@ -18,11 +18,15 @@
 #include "react_tce.h"
 #include "particle.h"
 #include "collide.h"
+#include "update.h"
 #include "random_knuth.h"
 #include "error.h"
+#include "modify.h"
+#include "compute.h"
 
 using namespace SPARTA_NS;
 
+enum{NONE,DISCRETE,SMOOTH};
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 
 /* ---------------------------------------------------------------------- */
@@ -46,12 +50,14 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                       double pre_etrans, double pre_erot, double pre_evib,
                       double &post_etotal, int &kspecies)
 {
-  double pre_etotal,ecc,e_excess;
+  double pre_etotal,ecc,e_excess,z;
+  int imode;
   OneReaction *r;
 
   Particle::Species *species = particle->species;
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
+  int icell = ip->icell;
 
   double pre_ave_rotdof = (species[isp].rotdof + species[jsp].rotdof)/2.0;
 
@@ -73,8 +79,35 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     pre_etotal = pre_etrans + pre_erot + pre_evib;
 
-    ecc = pre_etrans;
-    if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
+    // two options for total energy in TCE model
+    // 0: partialEnergy = true: rDOF model
+    // 1: partialEnergy = false: TCE: Rotation + Vibration
+
+    // average DOFs participating in the reaction
+
+    if (partialEnergy) {
+       ecc = pre_etrans;
+       z = r->coeff[0];
+       if (pre_ave_rotdof > 0.1) ecc += pre_erot*z/pre_ave_rotdof;
+    }
+    else {
+       ecc = pre_etotal;
+       if (pre_etotal+r->coeff[4] <= 0.0) continue; // Cover cases where coeff[1].neq.coeff[4]
+       z = pre_ave_rotdof;
+       if (collide->vibstyle == SMOOTH) z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
+       else if (collide->vibstyle == DISCRETE) {
+           if (species[isp].vibdof == 2) z += (species[isp].vibtemp[0]/temp[icell]) / (exp(species[isp].vibtemp[0]/temp[icell])-1);
+           else if (species[isp].vibdof > 2) {
+               imode = 0;
+               while (imode < 4) z += (species[isp].vibtemp[imode]/temp[icell]) / (exp(species[isp].vibtemp[imode]/temp[icell])-1);
+           }
+           if (species[jsp].vibdof == 2) z += (species[jsp].vibtemp[0]/temp[icell]) / (exp(species[jsp].vibtemp[0]/temp[icell])-1);
+           else if (species[jsp].vibdof > 2) {
+               imode = 0;
+               while (imode < 4) z += (species[jsp].vibtemp[imode]/temp[icell]) / (exp(species[jsp].vibtemp[imode]/temp[icell])-1);
+           }
+       }
+    }
 
     e_excess = ecc - r->coeff[1];
     if (e_excess <= 0.0) continue;
@@ -86,9 +119,9 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->coeff[2] *
-          pow(ecc-r->coeff[1],r->coeff[3]) *
-          pow(1.0-r->coeff[1]/ecc,r->coeff[5]);
+        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
+          pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
+          pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
         break;
       }
 
@@ -107,8 +140,9 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         if (sp2recomb[recomb_species] != list[i]) continue;
 
         react_prob += recomb_boost * recomb_density * r->coeff[2] *
-          pow(ecc,r->coeff[3]) *
-          pow(1.0-r->coeff[1]/ecc,r->coeff[5]);
+          tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
+          pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *  // extended to general recombination case with non-zero activation energy
+          pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
         break;
       }
 
@@ -136,29 +170,32 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
     if (react_prob > random_prob) {
       tally_reactions[list[i]]++;
-      ip->ispecies = r->products[0];
 
-      switch (r->type) {
-      case DISSOCIATION:
-      case IONIZATION:
-      case EXCHANGE:
-        {
-          jp->ispecies = r->products[1];
-          break;
-        }
-      case RECOMBINATION:
-        {
-          // always destroy 2nd reactant species
+      if (!computeChemRates) {
+          ip->ispecies = r->products[0];
 
-          jp->ispecies = -1;
-          break;
-        }
+          switch (r->type) {
+          case DISSOCIATION:
+          case IONIZATION:
+          case EXCHANGE:
+            {
+              jp->ispecies = r->products[1];
+              break;
+            }
+          case RECOMBINATION:
+            {
+              // always destroy 2nd reactant species
+
+              jp->ispecies = -1;
+              break;
+            }
+          }
+
+          if (r->nproduct > 2) kspecies = r->products[2];
+          else kspecies = -1;
+
+          post_etotal = pre_etotal + r->coeff[4];
       }
-
-      if (r->nproduct > 2) kspecies = r->products[2];
-      else kspecies = -1;
-
-      post_etotal = pre_etotal + r->coeff[4];
 
       return 1;
     }

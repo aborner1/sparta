@@ -26,6 +26,7 @@
 #include "domain.h"
 #include "comm.h"
 #include "collide.h"
+#include "react.h"
 #include "grid.h"
 #include "surf.h"
 #include "surf_collide.h"
@@ -303,6 +304,7 @@ void Update::run(int nsteps)
 
     if (n_end_of_step) {
       modify->end_of_step();
+      if (react) react->compute_per_grid();
       timer->stamp(TIME_MODIFY);
     }
 
