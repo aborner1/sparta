@@ -69,6 +69,9 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
   double react_prob = 0.0;
   double random_prob = random->uniform();
+  double avei = 0.0;
+  double z1 = 0.0;
+  int nmode;
 
   // loop over possible reactions for these 2 species
 
@@ -94,25 +97,37 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
        ecc = pre_etotal;
        if (pre_etotal+r->coeff[4] <= 0.0) continue; // Cover cases where coeff[1].neq.coeff[4]
        z = pre_ave_rotdof;
-       if (collide->vibstyle == SMOOTH) z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
-       else if (collide->vibstyle == DISCRETE) {
-           if (species[isp].vibdof == 2) z += (species[isp].vibtemp[0]/temp[icell]) / (exp(species[isp].vibtemp[0]/temp[icell])-1);
-           else if (species[isp].vibdof > 2) {
-               imode = 0;
-               while (imode < 4) {
-                   z += (species[isp].vibtemp[imode]/temp[icell]) / (exp(species[isp].vibtemp[imode]/temp[icell])-1);
-                   imode++;
-               }
-           }
-           if (species[jsp].vibdof == 2) z += (species[jsp].vibtemp[0]/temp[icell]) / (exp(species[jsp].vibtemp[0]/temp[icell])-1);
-           else if (species[jsp].vibdof > 2) {
-               imode = 0;
-               while (imode < 4) {
-                   z += (species[jsp].vibtemp[imode]/temp[icell]) / (exp(species[jsp].vibtemp[imode]/temp[icell])-1);
-                   imode++;
-               }
-           }
-       }
+       z1 = pre_ave_rotdof;
+//       if (collide->vibstyle == SMOOTH)
+       z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
+//       else if (collide->vibstyle == DISCRETE) {
+//           if (species[isp].vibdof == 2) {
+//               avei = ip->evib / (update->boltz * species[isp].vibtemp[0]);
+//               if (avei > 0.0) z += avei * log(1 + 1.0/avei);
+//               z1 += (species[isp].vibtemp[0]/temp[icell]) / (exp(species[isp].vibtemp[0]/temp[icell])-1);
+//           }
+//           else if (species[isp].vibdof > 2) {
+//               nmode = species[isp].nvibmode;
+//               imode = 0;
+//               while (imode < nmode) {
+//                   z += (species[isp].vibtemp[imode]/temp[icell]) / (exp(species[isp].vibtemp[imode]/temp[icell])-1);
+//                   imode++;
+//               }
+//           }
+//           if (species[jsp].vibdof == 2) {
+//               avei = jp->evib / (update->boltz * species[jsp].vibtemp[0]);
+//               if (avei > 0.0) z += avei * log(1 + 1.0/avei);
+//               z1 += (species[jsp].vibtemp[0]/temp[icell]) / (exp(species[jsp].vibtemp[0]/temp[icell])-1);
+//           }
+//           else if (species[jsp].vibdof > 2) {
+//               imode = 0;
+//               while (imode < 4) {
+//                   z += (species[jsp].vibtemp[imode]/temp[icell]) / (exp(species[jsp].vibtemp[imode]/temp[icell])-1);
+//                   imode++;
+//               }
+//           }
+//       }
+//       printf("z_vib %f z_vib_temp %f evib %e ecc %e\n",z-2,z1-2,ip->evib+jp->evib,ecc);
     }
 
     e_excess = ecc - r->coeff[1];
