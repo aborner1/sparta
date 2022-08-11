@@ -51,13 +51,15 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                       double &post_etotal, int &kspecies)
 {
   double pre_etotal,ecc,e_excess,z;
-  int imode;
+  int inmode,jnmode;
   OneReaction *r;
 
   Particle::Species *species = particle->species;
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
   int icell = ip->icell;
+  double ievib = ip->evib;
+  double jevib = jp->evib;
 
   double pre_ave_rotdof = (species[isp].rotdof + species[jsp].rotdof)/2.0;
 
@@ -69,9 +71,10 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
   double react_prob = 0.0;
   double random_prob = random->uniform();
-  double avei = 0.0;
-  double z1 = 0.0;
-  int nmode;
+  double zi = 0.0;
+  double zj = 0.0;
+  double iTvib = 0.0;
+  double jTvib = 0.0;
 
   // loop over possible reactions for these 2 species
 
@@ -92,46 +95,55 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
        ecc = pre_etrans;
        z = r->coeff[0];
        if (pre_ave_rotdof > 0.1) ecc += pre_erot*z/pre_ave_rotdof;
-    }
-    else {
+    } else {
        ecc = pre_etotal;
-       if (pre_etotal+r->coeff[4] <= 0.0) continue; // Cover cases where coeff[1].neq.coeff[4]
        z = pre_ave_rotdof;
-       z1 = pre_ave_rotdof;
-//       if (collide->vibstyle == SMOOTH)
-       z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
-//       else if (collide->vibstyle == DISCRETE) {
-//           if (species[isp].vibdof == 2) {
-//               avei = ip->evib / (update->boltz * species[isp].vibtemp[0]);
-//               if (avei > 0.0) z += avei * log(1 + 1.0/avei);
-//               z1 += (species[isp].vibtemp[0]/temp[icell]) / (exp(species[isp].vibtemp[0]/temp[icell])-1);
-//           }
-//           else if (species[isp].vibdof > 2) {
-//               nmode = species[isp].nvibmode;
-//               imode = 0;
-//               while (imode < nmode) {
-//                   z += (species[isp].vibtemp[imode]/temp[icell]) / (exp(species[isp].vibtemp[imode]/temp[icell])-1);
-//                   imode++;
-//               }
-//           }
-//           if (species[jsp].vibdof == 2) {
-//               avei = jp->evib / (update->boltz * species[jsp].vibtemp[0]);
-//               if (avei > 0.0) z += avei * log(1 + 1.0/avei);
-//               z1 += (species[jsp].vibtemp[0]/temp[icell]) / (exp(species[jsp].vibtemp[0]/temp[icell])-1);
-//           }
-//           else if (species[jsp].vibdof > 2) {
-//               imode = 0;
-//               while (imode < 4) {
-//                   z += (species[jsp].vibtemp[imode]/temp[icell]) / (exp(species[jsp].vibtemp[imode]/temp[icell])-1);
-//                   imode++;
-//               }
-//           }
-//       }
-//       printf("z_vib %f z_vib_temp %f evib %e ecc %e\n",z-2,z1-2,ip->evib+jp->evib,ecc);
     }
 
-    e_excess = ecc - r->coeff[1];
+    // Cover cases where coeff[1].neq.coeff[4]
+    if (r->coeff[1]>((-1)*r->coeff[4])) e_excess = ecc - r->coeff[1];
+    else e_excess = ecc + r->coeff[4];
     if (e_excess <= 0.0) continue;
+
+
+    if (!partialEnergy) {
+       if (temp[icell] < 1 || temp[icell] > 10000000) compute_per_grid();
+       if (temp[icell] < 1 || temp[icell] > 10000000 || isnan(temp[icell])) continue;
+
+       if (collide->vibstyle == SMOOTH) z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
+       else if (collide->vibstyle == DISCRETE) {
+            inmode = species[isp].nvibmode;
+            jnmode = species[jsp].nvibmode;
+            //Cell-Averaged z for diatomic molecules (note, this should probably be Tvib instead of Tcell)
+            if (inmode == 1 && temp[icell] > 300.0) zi = 2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
+            else if (inmode > 1) {
+              if (ievib < 1e-26 ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions to newtonTvib
+              //Instantaneous T for polyatomic
+              else {
+                iTvib = newtonTvib(inmode,ievib,particle->species[isp].vibtemp,3000,1e-4,1000);
+                zi = (2 * ievib)/(update->boltz * iTvib);
+              }
+            }
+
+            if (jnmode == 1 && temp[icell] > 300.0) zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
+            else if (inmode > 1) {
+              if (jevib < 1e-26) zj = 0.0;
+              else {
+                jTvib = newtonTvib(jnmode,jevib,particle->species[jsp].vibtemp,3000,1e-4,1000);
+                zj = (2 * jevib)/(update->boltz * jTvib);
+              }
+            }
+
+            //cout << zi << " " << ievib << " " << zj << " " << jevib << endl;
+            if (isnan(zi) || isnan(zj) || zi<0 || zj<0) {
+              //cout << z << " " << (2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 )) << " " << (2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 )) << " " << temp[icell] << " " << particle->species[isp].vibtemp[0] << endl;
+              //cout << zi << " " << zj << " " << ievib << " " << jevib << endl;
+              error->all(FLERR,"Root-Finding Error");
+            }
+            z += 0.5 * (zi+zj);
+       }
+       //cout << z << " " << zi << " " << zj << " " << inmode << " " << jnmode << endl;
+    }
 
     // compute probability of reaction
 
@@ -223,4 +235,97 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   }
 
   return 0;
+}
+
+/* ---------------------------------------------------------------------- */
+
+double ReactTCE::bird_Evib(int nmode, double Tvib,
+                            double vibtemp[],
+                            double Evib)
+{
+
+  // COMPUTES f FOR NEWTON'S SEARCH METHOD OUTLINED IN "newtonTvib".
+
+  double f = -Evib;
+  double kb = 1.38064852e-23;
+
+  for (int i = 0; i < nmode; i++) {
+    f += (((kb*vibtemp[i])/(exp(vibtemp[i]/Tvib)-1)));
+  }
+
+  return f;
+
+}
+
+
+/* ---------------------------------------------------------------------- */
+
+double ReactTCE::bird_dEvib(int nmode, double Tvib, double vibtemp[])
+{
+
+  // COMPUTES df FOR NEWTON'S SEARCH METHOD
+
+  double df = 0.0;
+  double kb = 1.38064852e-23;
+
+  for (int i = 0; i < nmode; i++) {
+    df += ((pow(vibtemp[i],2)*kb*exp(vibtemp[i]/Tvib))/(pow(Tvib,2)*pow(exp(vibtemp[i]/Tvib)-1,2)));
+  }
+
+  return df;
+
+}
+
+/* ---------------------------------------------------------------------- */
+
+double ReactTCE::newtonTvib(int nmode, double Evib, double vibTemp[],
+               double Tvib0,
+               double tol,
+               int nmax)
+{
+
+
+  // FUNCTION FOR CONVERTING VIBRATIONAL ENERGY TO VIBRATIONAL TEMPERATURE
+  // Computes Tvib assuming the vibrational energy levels occupy a simple harmonic oscillator (SHO)
+  // spacing.
+  // Search for Tvib begins at some initial value "Tvib0" until the search reaches a tolerance level "tol".
+
+
+  double f;
+  double df;
+  double Tvib, Tvib_prev;
+  double err;
+  int i;
+
+  // Uses Newton's method to solve for a vibrational temperature given a
+  // distribution of vibrational energy levels.
+
+  // f and df are computed for Newton's search
+  f = bird_Evib(nmode,Tvib0,vibTemp,Evib);
+  df = bird_dEvib(nmode,Tvib0,vibTemp);
+
+  // Update guess for Tvib and compute error
+  Tvib = Tvib0 - (f/df);
+  err = fabs(Tvib-Tvib0);
+
+  i=2;
+
+  // Continue to search for Tvib until the error is greater than the tolerance:
+  while((err >= tol) && (i <= nmax))
+  {
+
+    Tvib_prev = Tvib;
+
+    f = bird_Evib(nmode,Tvib,vibTemp,Evib);
+    df = bird_dEvib(nmode,Tvib,vibTemp);
+
+    Tvib = Tvib_prev-(f/df);
+    err = fabs(Tvib-Tvib_prev);
+
+    i=i+1;
+
+  }
+
+  return Tvib;
+
 }
