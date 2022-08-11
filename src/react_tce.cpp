@@ -23,6 +23,8 @@
 #include "error.h"
 #include "modify.h"
 #include "compute.h"
+#include <iostream>
+using namespace std;
 
 using namespace SPARTA_NS;
 
@@ -107,32 +109,33 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
 
     if (!partialEnergy) {
-       if (temp[icell] < 1 || temp[icell] > 10000000) compute_per_grid();
-       if (temp[icell] < 1 || temp[icell] > 10000000 || isnan(temp[icell])) continue;
+//       if (temp[icell] < 1 || temp[icell] > 10000000) compute_per_grid();
+//       if (temp[icell] < 1 || temp[icell] > 10000000 || isnan(temp[icell])) continue;
 
        if (collide->vibstyle == SMOOTH) z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
        else if (collide->vibstyle == DISCRETE) {
             inmode = species[isp].nvibmode;
             jnmode = species[jsp].nvibmode;
+//            cout << ievib << " " << jevib << " " << pre_evib << " " << ecc << endl;
             //Cell-Averaged z for diatomic molecules (note, this should probably be Tvib instead of Tcell)
-            if (inmode == 1 && temp[icell] > 300.0) zi = 2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
-            else if (inmode > 1) {
+//            if (inmode == 1 && temp[icell] > 300.0) zi = 2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
+//            else if (inmode > 1) {
               if (ievib < 1e-26 ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions to newtonTvib
               //Instantaneous T for polyatomic
               else {
                 iTvib = newtonTvib(inmode,ievib,particle->species[isp].vibtemp,3000,1e-4,1000);
                 zi = (2 * ievib)/(update->boltz * iTvib);
               }
-            }
+//            }
 
-            if (jnmode == 1 && temp[icell] > 300.0) zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
-            else if (inmode > 1) {
+//            if (jnmode == 1 && temp[icell] > 300.0) zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
+//            else if (inmode > 1) {
               if (jevib < 1e-26) zj = 0.0;
               else {
                 jTvib = newtonTvib(jnmode,jevib,particle->species[jsp].vibtemp,3000,1e-4,1000);
                 zj = (2 * jevib)/(update->boltz * jTvib);
               }
-            }
+//            }
 
             //cout << zi << " " << ievib << " " << zj << " " << jevib << endl;
             if (isnan(zi) || isnan(zj) || zi<0 || zj<0) {
@@ -142,7 +145,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
             }
             z += 0.5 * (zi+zj);
        }
-       //cout << z << " " << zi << " " << zj << " " << inmode << " " << jnmode << endl;
+//       cout << z << " " << zi << " " << iTvib << " " << zj << " "  << jTvib << " " << inmode << " " << jnmode << endl;
     }
 
     // compute probability of reaction
@@ -152,9 +155,10 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     case IONIZATION:
     case EXCHANGE:
       {
-        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
+        react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
           pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
+//        if ((react_prob > 1.0) || (react_prob < 0.0)) cout << "react_prob = " << react_prob << " isp " << isp << " jsp " << jsp << " Ec " << ecc << " Ea " << r->coeff[1] << " Ec/Ea " << ecc/r->coeff[1] << " Br+z+0.5 " << r->coeff[3]+z+0.5 << endl;
         break;
       }
 

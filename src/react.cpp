@@ -172,6 +172,7 @@ void React::modify_params(int narg, char **arg)
 
 void React::compute_per_grid()
 {
+  return;
   if (partialEnergy) return;
 
   invoked_per_grid = update->ntimestep;
