@@ -413,7 +413,6 @@ void Surf::add_line(surfint id, int itype, double *p1, double *p2)
   lines[nlocal].p2[1] = p2[1];
   lines[nlocal].p2[2] = 0.0;
   lines[nlocal].transparent = 0;
-  lines[nlocal].temp = 0.0;
   nlocal++;
 }
 
@@ -473,7 +472,6 @@ void Surf::add_line_own(surfint id, int itype, double *p1, double *p2)
   mylines[m].p2[1] = p2[1];
   mylines[m].p2[2] = 0.0;
   mylines[m].transparent = 0;
-  mylines[m].temp = 0.0;
 }
 
 /* ----------------------------------------------------------------------
@@ -501,7 +499,6 @@ void Surf::add_line_temporary(surfint id, int itype, double *p1, double *p2)
   tmplines[ntmp].p2[1] = p2[1];
   tmplines[ntmp].p2[2] = 0.0;
   tmplines[ntmp].transparent = 0;
-  tmplines[ntmp].temp = 0.0;
   ntmp++;
 }
 
@@ -534,7 +531,6 @@ void Surf::add_tri(surfint id, int itype, double *p1, double *p2, double *p3)
   tris[nlocal].p3[1] = p3[1];
   tris[nlocal].p3[2] = p3[2];
   tris[nlocal].transparent = 0;
-  tris[nlocal].temp = 0.0;
   nlocal++;
 }
 
@@ -597,7 +593,6 @@ void Surf::add_tri_own(surfint id, int itype, double *p1, double *p2, double *p3
   mytris[m].p3[1] = p3[1];
   mytris[m].p3[2] = p3[2];
   mytris[m].transparent = 0;
-  mytris[m].temp = 0.0;
 }
 
 /* ----------------------------------------------------------------------
@@ -633,7 +628,6 @@ void Surf::add_tri_own_clip(surfint id, int itype,
   mytris[nown].p3[1] = p3[1];
   mytris[nown].p3[2] = p3[2];
   mytris[nown].transparent = 0;
-  mytris[nown].temp = 0.0;
   nown++;
 }
 
@@ -666,7 +660,6 @@ void Surf::add_tri_temporary(surfint id, int itype,
   tmptris[ntmp].p3[1] = p3[1];
   tmptris[ntmp].p3[2] = p3[2];
   tmptris[ntmp].transparent = 0;
-  tmptris[ntmp].temp = 0.0;
   ntmp++;
 }
 
@@ -2765,7 +2758,7 @@ void Surf::collate_vector_reduce(int nrow, surfint *tally2surf,
 
   // zero all values and add in values I accumulated
 
-  for (i = 0; i < nglobal; i++) one[i] = 0.0;
+  memset(one,0,nglobal*sizeof(double));
 
   Surf::Line *lines = surf->lines;
   Surf::Tri *tris = surf->tris;
@@ -2931,9 +2924,7 @@ void Surf::collate_array_reduce(int nrow, int ncol, surfint *tally2surf,
 
   // zero all values and set values I accumulated
 
-  for (i = 0; i < nglobal; i++)
-    for (j = 0; j < ncol; j++)
-      one[i][j] = 0.0;
+  memset(&one[0][0],0,nglobal*ncol*sizeof(double));
 
   Surf::Line *lines = surf->lines;
   Surf::Tri *tris = surf->tris;
@@ -3703,7 +3694,7 @@ int Surf::find_custom(char *name)
    assumes name does not already exist, except in case of restart
    type = 0/1 for int/double
    size = 0 for vector, size > 0 for array with size columns
-   return index of its location;
+   return index of its location
 ------------------------------------------------------------------------- */
 
 int Surf::add_custom(char *name, int type, int size)
@@ -3903,7 +3894,6 @@ void Surf::write_restart(FILE *fp)
       fwrite(&lines[i].type,sizeof(int),1,fp);
       fwrite(&lines[i].mask,sizeof(int),1,fp);
       fwrite(&lines[i].transparent,sizeof(int),1,fp);
-      fwrite(&lines[i].temp,sizeof(double),1,fp);
       fwrite(lines[i].p1,sizeof(double),3,fp);
       fwrite(lines[i].p2,sizeof(double),3,fp);
     }
@@ -3916,7 +3906,6 @@ void Surf::write_restart(FILE *fp)
       fwrite(&tris[i].type,sizeof(int),1,fp);
       fwrite(&tris[i].mask,sizeof(int),1,fp);
       fwrite(&tris[i].transparent,sizeof(int),1,fp);
-      fwrite(&tris[i].temp,sizeof(double),1,fp);
       fwrite(tris[i].p1,sizeof(double),3,fp);
       fwrite(tris[i].p2,sizeof(double),3,fp);
       fwrite(tris[i].p3,sizeof(double),3,fp);
@@ -3960,6 +3949,7 @@ void Surf::read_restart(FILE *fp)
     lines = (Line *) memory->smalloc(nsurf*sizeof(Line),"surf:lines");
     // NOTE: need different logic for different surf styles
     nlocal = nsurf;
+    nmax = nlocal;
 
     if (me == 0) {
       for (int i = 0; i < nsurf; i++) {
@@ -3967,7 +3957,6 @@ void Surf::read_restart(FILE *fp)
         fread(&lines[i].type,sizeof(int),1,fp);
         fread(&lines[i].mask,sizeof(int),1,fp);
         fread(&lines[i].transparent,sizeof(int),1,fp);
-        fread(&lines[i].temp,sizeof(double),1,fp);
         lines[i].isc = lines[i].isr = -1;
         fread(lines[i].p1,sizeof(double),3,fp);
         fread(lines[i].p2,sizeof(double),3,fp);
@@ -3985,6 +3974,7 @@ void Surf::read_restart(FILE *fp)
     tris = (Tri *) memory->smalloc(nsurf*sizeof(Tri),"surf:tris");
     // NOTE: need different logic for different surf styles
     nlocal = nsurf;
+    nmax = nlocal;
 
     if (me == 0) {
       for (int i = 0; i < nsurf; i++) {
@@ -3992,7 +3982,6 @@ void Surf::read_restart(FILE *fp)
         fread(&tris[i].type,sizeof(int),1,fp);
         fread(&tris[i].mask,sizeof(int),1,fp);
         fread(&tris[i].transparent,sizeof(int),1,fp);
-        fread(&tris[i].temp,sizeof(double),1,fp);
         tris[i].isc = tris[i].isr = -1;
         fread(tris[i].p1,sizeof(double),3,fp);
         fread(tris[i].p2,sizeof(double),3,fp);

@@ -780,7 +780,7 @@ typedef tdual_bigint_1d::t_host_um t_bigint_1d_um;
 typedef tdual_bigint_1d::t_host_const_um t_bigint_1d_const_um;
 typedef tdual_bigint_1d::t_host_const_randomread t_bigint_1d_randomread;
 
-typedef Kokkos::DualView<int*[3], Kokkos::LayoutRight, DeviceType> tdual_int_1d_3;
+typedef Kokkos::DualView<int*[3], DeviceType::array_layout, DeviceType> tdual_int_1d_3;
 typedef tdual_int_1d_3::t_host t_int_1d_3;
 typedef tdual_int_1d_3::t_host_const t_int_1d_3_const;
 typedef tdual_int_1d_3::t_host_um t_int_1d_3_um;
@@ -1017,9 +1017,32 @@ struct Graph {
   int& get(int i, int j) const { return at(start(i) + j); }
 };
 
-//default SPARTA Types
+// default SPARTA Types
 typedef struct ArrayTypes<DeviceType> DAT;
 typedef struct ArrayTypes<SPAHostType> HAT;
+
+// custom data types
+
+namespace SPARTA_NS {
+
+  struct struct_tdual_int_1d
+  { DAT::tdual_int_1d k_view; };
+
+  struct struct_tdual_float_1d
+  { DAT::tdual_float_1d k_view; };
+
+  struct struct_tdual_int_2d
+  { DAT::tdual_int_2d k_view; };
+
+  struct struct_tdual_float_2d
+  { DAT::tdual_float_2d k_view; };
+
+  typedef Kokkos::DualView<struct_tdual_int_1d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_int_1d_1d;
+  typedef Kokkos::DualView<struct_tdual_float_1d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_float_1d_1d;
+  typedef Kokkos::DualView<struct_tdual_int_2d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_int_2d_1d;
+  typedef Kokkos::DualView<struct_tdual_float_2d*, DeviceType::array_layout, DeviceType> tdual_struct_tdual_float_2d_1d;
+}
+
 
 template<class DeviceType, class BufferView, class DualView>
 void buffer_view(BufferView &buf, DualView &view,

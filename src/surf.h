@@ -66,7 +66,6 @@ class Surf : protected Pointers {
                             // rhand rule: Z x (p2-p1) = outward normal
     double norm[3];         // outward normal to line segment
     int transparent;        // 1 if surf is transparent
-    double temp;            // surf element temperature
   };
 
   struct Tri {
@@ -79,7 +78,6 @@ class Surf : protected Pointers {
                             // rhand rule: (p2-p1) x (p3-p1) = outward normal
     double norm[3];         // outward normal to triangle
     int transparent;        // 1 if surf is transparent
-    double temp;            // surf element temperature
   };
 
   Line *lines;              // list of lines for surface collisions
@@ -101,6 +99,9 @@ class Surf : protected Pointers {
   Tri *mytris;              // list of tris assigned uniquely to me
                             //   only for explicit, distributed
   int nown;                 // # of lines or tris I own uniquely
+                            // explicit, all: nown = nsurf/P
+                            // explicit, distributed: nown for mylines/mytris
+                            // implicit: not defined
   int maxown;               // max length of owned lines/tris vecs
 
   Line *tmplines;           // list of temporary lines, filled by ReadSurf
@@ -162,7 +163,7 @@ class Surf : protected Pointers {
   int hashfilled;             // 1 if hash is filled with surf IDs
 
   Surf(class SPARTA *);
-  ~Surf();
+  virtual ~Surf();
   void global(char *);
   void modify_params(int, char **);
   void init();
@@ -237,9 +238,9 @@ class Surf : protected Pointers {
 
   int find_custom(char *);
   void error_custom();
-  int add_custom(char *, int, int);
-  void allocate_custom(int, int);
-  void remove_custom(int);
+  virtual int add_custom(char *, int, int);
+  virtual void allocate_custom(int, int);
+  virtual void remove_custom(int);
 
   void write_restart(FILE *);
   void read_restart(FILE *);

@@ -29,31 +29,23 @@ namespace SPARTA_NS {
 class FixSurfTemp : public Fix {
  public:
   FixSurfTemp(class SPARTA *, int, char **);
-  ~FixSurfTemp();
+  virtual ~FixSurfTemp();
   int setmask();
-  void init();
+  virtual void init();
   virtual void end_of_step();
 
  private:
-  int ifix,m;
-  double twall,prefactor,emi;
+  int source,icompute,ifix,firstflag;
+  int groupbit;
+  double twall,emi;
+  int tindex,qwindex;
+
   char *id_qw;
-  int qwindex;
+  class Compute *cqw;
   class Fix *fqw;
-  double *qw,*qw_all;
 
-  Surf::Line *lines;
-  Surf::Tri *tris;
-
-  int distributed,implicit,dimension;  // Surf settings
-  int firstflag;
-
-  int groupbit;              // mask for surface group
-  int nown;                  // # of surf elements owned by this proc
-  int nchoose;               // # of surf elements output by this proc
-  int nsurf;                 // nown or nlocal
-  int *cglobal;              // indices of global elements for nchoose
-  int *clocal;               // indices of local owned elements for nchoose
+  double prefactor,threshold;
+  double *tvector_me;
 };
 
 }
