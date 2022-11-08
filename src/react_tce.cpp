@@ -75,6 +75,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double random_prob = random->uniform();
   double zi = 0.0;
   double zj = 0.0;
+  int avei = 0;
+  int avej = 0;
   double iTvib = 0.0;
   double jTvib = 0.0;
 
@@ -118,24 +120,34 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
             jnmode = species[jsp].nvibmode;
 //            cout << ievib << " " << jevib << " " << pre_evib << " " << ecc << endl;
             //Cell-Averaged z for diatomic molecules (note, this should probably be Tvib instead of Tcell)
-//            if (inmode == 1 && temp[icell] > 300.0) zi = 2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
-//            else if (inmode > 1) {
-              if (ievib < 1e-26 ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions to newtonTvib
-              //Instantaneous T for polyatomic
-              else {
-                iTvib = newtonTvib(inmode,ievib,particle->species[isp].vibtemp,3000,1e-4,1000);
-                zi = (2 * ievib)/(update->boltz * iTvib);
-              }
-//            }
+            if (inmode == 1) {
+//                zi = 2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
+                avei = static_cast<int>
+                        (ievib / (update->boltz * species[isp].vibtemp[0]));
+                if (avei > 0) zi = 2.0 * avei * log(1.0 / avei + 1.0);
+                else zi = 0.0;
+            } else if (inmode > 1) {
+                if (ievib < 1e-26 ) zi = 0.0; //Low Energy Cut-Off to prevent nan solutions to newtonTvib
+                //Instantaneous T for polyatomic
+                else {
+                  iTvib = newtonTvib(inmode,ievib,species[isp].vibtemp,3000,1e-4,1000);
+                  zi = (2 * ievib)/(update->boltz * iTvib);
+                }
+            }
 
-//            if (jnmode == 1 && temp[icell] > 300.0) zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
-//            else if (inmode > 1) {
-              if (jevib < 1e-26) zj = 0.0;
-              else {
-                jTvib = newtonTvib(jnmode,jevib,particle->species[jsp].vibtemp,3000,1e-4,1000);
-                zj = (2 * jevib)/(update->boltz * jTvib);
-              }
-//            }
+            if (jnmode == 1) {
+//                zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
+                avej = static_cast<int>
+                        (jevib / (update->boltz * species[jsp].vibtemp[0]));
+                if (avej > 0) zj = 2.0 * avej * log(1.0 / avej + 1.0);
+                else zj = 0.0;
+            } else if (inmode > 1) {
+                if (jevib < 1e-26) zj = 0.0;
+                else {
+                  jTvib = newtonTvib(jnmode,jevib,species[jsp].vibtemp,3000,1e-4,1000);
+                  zj = (2 * jevib)/(update->boltz * jTvib);
+                }
+            }
 
             //cout << zi << " " << ievib << " " << zj << " " << jevib << endl;
             if (isnan(zi) || isnan(zj) || zi<0 || zj<0) {
