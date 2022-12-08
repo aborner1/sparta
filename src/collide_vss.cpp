@@ -432,7 +432,7 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
 /* ---------------------------------------------------------------------- */
 
 void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
-						Particle::OnePart *jp)
+                                                Particle::OnePart *jp)
 {
 
   double State_prob,Fraction_Rot,Fraction_Vib,E_Dispose,transdof;
@@ -478,7 +478,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
             E_Dispose += p->erot;
             Fraction_Rot =
               1- pow(random->uniform(),
-		     (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+                     (1/(2.5-params[ip->ispecies][jp->ispecies].omega)));
             p->erot = Fraction_Rot * E_Dispose;
             E_Dispose -= p->erot;
           } else {
@@ -519,7 +519,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
               }
               E_Dispose -= p->evib;
             }
-
+        postcoln.evib += p->evib;
         } else if (vibstyle == DISCRETE) {
 
             if (vibdof == 2) {
@@ -546,9 +546,8 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                 } while (State_prob < random->uniform());
                 E_Dispose -= p->evib;
               }
-
+            postcoln.evib += p->evib;
             } else if (vibdof > 2) {
-                p->evib = 0.0;
 
                 int nmode = particle->species[sp].nvibmode;
                 int **vibmode =
@@ -556,8 +555,9 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                 int pindex = p - particle->particles;
 
                 for (int imode = 0; imode < nmode; imode++) {
-                  avei = static_cast<int>
-                          (p->evib / (update->boltz * species[sp].vibtemp[imode]));
+                  avei = vibmode[pindex][imode];
+//                          static_cast<int>
+//                          (p->evib / (update->boltz * species[sp].vibtemp[imode]));
                   if (avei > 0) ksi = 2.0 * avei * log(1.0 / avei + 1.0);
                   else ksi = 0.0;
                   A = 2.0 * pow(avei,3.0) / (1.0 + avei);
@@ -569,6 +569,8 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                   if (vibn_phi >= random->uniform()) {
                     ivib = vibmode[pindex][imode];
                     E_Dispose += ivib * update->boltz *
+                      particle->species[sp].vibtemp[imode];
+                    p->evib -= ivib * update->boltz *
                       particle->species[sp].vibtemp[imode];
                     max_level = static_cast<int>
                       (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
@@ -584,11 +586,12 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                     vibmode[pindex][imode] = ivib;
                     p->evib += pevib;
                     E_Dispose -= pevib;
+                    postcoln.evib += pevib;
                   }
                 }
             }
           } // end of vibstyle if
-        postcoln.evib += p->evib;
+//        postcoln.evib += p->evib;
       } // end of vibdof if
     }
   }
