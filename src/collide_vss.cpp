@@ -489,8 +489,8 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
             E_Dispose -= p->erot;
           }
         }
-      }
       postcoln.erot += p->erot;
+      }
 
       vibdof = species[sp].vibdof;
       double vibn_phi = species[sp].vibrel[0];
@@ -499,7 +499,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
         if (vibstyle == NONE) {
           p->evib = 0.0;
 
-        } if (vibstyle == SMOOTH) {
+        } else if (vibstyle == SMOOTH) {
 
             if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite(sp,E_Dispose+p->evib,vibdof);
             else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite_highT(sp,E_Dispose+p->evib,vibdof);
@@ -519,18 +519,27 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
               }
               E_Dispose -= p->evib;
             }
-        postcoln.evib += p->evib;
+//        postcoln.evib += p->evib;
         } else if (vibstyle == DISCRETE) {
 
             if (vibdof == 2) {
-              avei = static_cast<int>
-                      (p->evib / (update->boltz * species[sp].vibtemp[0]));
-              if (avei > 0) ksi = 2.0 * avei * log(1.0 / avei + 1.0);
-              else ksi = 0.0;
-              A = 2.0 * pow(avei,3.0) / (1.0 + avei);
+//              avei = static_cast<int>
+//                      (p->evib / (update->boltz * species[sp].vibtemp[0]));
+//              if (avei > 0) ksi = 2.0 * avei * log(1.0 / avei + 1.0);
+//              else ksi = 0.0;
+//              A = 2.0 * pow(avei,3.0) / (1.0 + avei);
 
-              if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + A/transdof)*vibrel_milwhite(sp,E_Dispose+p->evib,ksi);
-              else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + A/transdof)*vibrel_milwhite_highT(sp,E_Dispose+p->evib,ksi);
+              if (p->evib > 0.0) {
+                  char_ratio = update->boltz * species[sp].vibtemp[0] / p->evib;
+                  zeta = 2.0 * char_ratio / (exp(char_ratio) - 1.0);
+                  gamma = 0.5 * pow(zeta, 2.0) * exp(char_ratio);
+              } else {
+                  gamma = 0.0;
+                  zeta = 0.0;
+              }
+
+              if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + gamma/transdof)*vibrel_milwhite(sp,E_Dispose+p->evib,zeta);
+              else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + gamma/transdof)*vibrel_milwhite_highT(sp,E_Dispose+p->evib,zeta);
 
               if (vibn_phi >= random->uniform()) {
 
@@ -546,7 +555,6 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                 } while (State_prob < random->uniform());
                 E_Dispose -= p->evib;
               }
-            postcoln.evib += p->evib;
             } else if (vibdof > 2) {
 
                 int nmode = particle->species[sp].nvibmode;
@@ -558,19 +566,25 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                   avei = vibmode[pindex][imode];
 //                          static_cast<int>
 //                          (p->evib / (update->boltz * species[sp].vibtemp[imode]));
-                  if (avei > 0) ksi = 2.0 * avei * log(1.0 / avei + 1.0);
-                  else ksi = 0.0;
-                  A = 2.0 * pow(avei,3.0) / (1.0 + avei);
+                  if (avei > 0) {
+                      char_ratio = (double) 1.0/avei;
+                      zeta = 2.0 * char_ratio / (exp(char_ratio) - 1.0);
+                      gamma = 0.5 * pow(zeta, 2.0) * exp(char_ratio);
+                  } else {
+                      gamma = 0.0;
+                      zeta = 0.0;
+                  }
 
-                  if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + A/transdof)*vibrel_milwhite(sp,E_Dispose+p->evib,ksi);
-                  else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + A/transdof)*vibrel_milwhite_highT(sp,E_Dispose+p->evib,ksi);
+                  if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + gamma/transdof)*vibrel_milwhite(sp,E_Dispose+avei * update->boltz *
+                                                                                                  particle->species[sp].vibtemp[imode],zeta);
+                  else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + gamma/transdof)*vibrel_milwhite_highT(sp,E_Dispose+avei * update->boltz *
+                                                                                                                  particle->species[sp].vibtemp[imode],zeta);
                   else vibn_phi = species[sp].vibrel[imode];
 
                   if (vibn_phi >= random->uniform()) {
-                    ivib = vibmode[pindex][imode];
-                    E_Dispose += ivib * update->boltz *
+                    E_Dispose += avei * update->boltz *
                       particle->species[sp].vibtemp[imode];
-                    p->evib -= ivib * update->boltz *
+                    p->evib -= avei * update->boltz *
                       particle->species[sp].vibtemp[imode];
                     max_level = static_cast<int>
                       (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
@@ -586,12 +600,11 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                     vibmode[pindex][imode] = ivib;
                     p->evib += pevib;
                     E_Dispose -= pevib;
-                    postcoln.evib += pevib;
                   }
                 }
             }
           } // end of vibstyle if
-//        postcoln.evib += p->evib;
+        postcoln.evib += p->evib;
       } // end of vibdof if
     }
   }

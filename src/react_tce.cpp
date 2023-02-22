@@ -133,7 +133,7 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                   iTvib = newtonTvib(inmode,ievib,species[isp].vibtemp,3000,1e-4,1000);
                   zi = (2 * ievib)/(update->boltz * iTvib);
                 }
-            }
+            } else zi = 0.0;
 
             if (jnmode == 1) {
 //                zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
@@ -141,13 +141,13 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                         (jevib / (update->boltz * species[jsp].vibtemp[0]));
                 if (avej > 0) zj = 2.0 * avej * log(1.0 / avej + 1.0);
                 else zj = 0.0;
-            } else if (inmode > 1) {
+            } else if (jnmode > 1) {
                 if (jevib < 1e-26) zj = 0.0;
                 else {
                   jTvib = newtonTvib(jnmode,jevib,species[jsp].vibtemp,3000,1e-4,1000);
                   zj = (2 * jevib)/(update->boltz * jTvib);
                 }
-            }
+            } else zj = 0.0;
 
             //cout << zi << " " << ievib << " " << zj << " " << jevib << endl;
             if (isnan(zi) || isnan(zj) || zi<0 || zj<0) {
