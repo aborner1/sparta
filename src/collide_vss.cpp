@@ -446,8 +446,9 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
   postcoln.evib = 0.0;
   double pevib = 0.0;
   int avei = 0;
-  double ksi = 0.0;
-  double A = 0.0;
+  double char_ratio = 0.0;
+  double zeta = 0.0;
+  double gamma = 0.0;
 
   // handle each kind of energy disposal for non-reacting reactants
 
