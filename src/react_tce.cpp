@@ -111,17 +111,13 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
 
 
     if (!partialEnergy) {
-//       if (temp[icell] < 1 || temp[icell] > 10000000) compute_per_grid();
-//       if (temp[icell] < 1 || temp[icell] > 10000000 || isnan(temp[icell])) continue;
 
        if (collide->vibstyle == SMOOTH) z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
        else if (collide->vibstyle == DISCRETE) {
             inmode = species[isp].nvibmode;
             jnmode = species[jsp].nvibmode;
-//            cout << ievib << " " << jevib << " " << pre_evib << " " << ecc << endl;
-            //Cell-Averaged z for diatomic molecules (note, this should probably be Tvib instead of Tcell)
+            //Cell-Averaged z for diatomic molecules
             if (inmode == 1) {
-//                zi = 2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
                 avei = static_cast<int>
                         (ievib / (update->boltz * species[isp].vibtemp[0]));
                 if (avei > 0) zi = 2.0 * avei * log(1.0 / avei + 1.0);
@@ -136,7 +132,6 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
             } else zi = 0.0;
 
             if (jnmode == 1) {
-//                zj = 2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 );
                 avej = static_cast<int>
                         (jevib / (update->boltz * species[jsp].vibtemp[0]));
                 if (avej > 0) zj = 2.0 * avej * log(1.0 / avej + 1.0);
@@ -149,15 +144,9 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                 }
             } else zj = 0.0;
 
-            //cout << zi << " " << ievib << " " << zj << " " << jevib << endl;
-            if (isnan(zi) || isnan(zj) || zi<0 || zj<0) {
-              //cout << z << " " << (2. * (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[isp].vibtemp[0] / temp[icell]) - 1)) + 1.0 )) << " " << (2. * (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) * log(1.0 / (1 / (exp(particle->species[jsp].vibtemp[0] / temp[icell]) - 1)) + 1.0 )) << " " << temp[icell] << " " << particle->species[isp].vibtemp[0] << endl;
-              //cout << zi << " " << zj << " " << ievib << " " << jevib << endl;
-              error->all(FLERR,"Root-Finding Error");
-            }
+            if (isnan(zi) || isnan(zj) || zi<0 || zj<0) error->all(FLERR,"Root-Finding Error");
             z += 0.5 * (zi+zj);
        }
-//       cout << z << " " << zi << " " << iTvib << " " << zj << " "  << jTvib << " " << inmode << " " << jnmode << endl;
     }
 
     // compute probability of reaction
@@ -170,7 +159,6 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         react_prob += r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
           pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
           pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
-//        if ((react_prob > 1.0) || (react_prob < 0.0)) cout << "react_prob = " << react_prob << " isp " << isp << " jsp " << jsp << " Ec " << ecc << " Ea " << r->coeff[1] << " Ec/Ea " << ecc/r->coeff[1] << " Br+z+0.5 " << r->coeff[3]+z+0.5 << endl;
         break;
       }
 
