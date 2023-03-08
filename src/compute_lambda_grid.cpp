@@ -46,59 +46,7 @@ ComputeLambdaGrid::ComputeLambdaGrid(SPARTA *sparta, int narg, char **arg) :
   // parse three required input fields
   // customize a new keyword by adding to if statement
 
-  id_nrho = id_temp = NULL;
-
-  if (strncmp(arg[2],"c_",2) == 0 || strncmp(arg[2],"f_",2) == 0) {
-    int n = strlen(arg[2]);
-    id_nrho = new char[n];
-    strcpy(id_nrho,&arg[2][2]);
-
-    char *ptr = strchr(id_nrho,'[');
-    if (ptr) {
-      if (id_nrho[strlen(id_nrho)-1] != ']')
-        error->all(FLERR,"Invalid nrho in compute lambda/grid command");
-      nrhoindex = atoi(ptr+1);
-      *ptr = '\0';
-    } else nrhoindex = 0;
-
-    if (strncmp(arg[2],"c_",2) == 0) nrhowhich = COMPUTE;
-    else nrhowhich = FIX;
-
-    if (nrhowhich == COMPUTE) {
-      int n = modify->find_compute(id_nrho);
-      if (n < 0)
-        error->all(FLERR,"Could not find compute lambda/grid compute ID");
-      if (modify->compute[n]->per_grid_flag == 0)
-        error->all(FLERR,"Compute lambda/grid compute does not "
-                   "compute per-grid info");
-      if (nrhoindex == 0 && modify->compute[n]->size_per_grid_cols > 0)
-        error->all(FLERR,
-                   "Compute lambda/grid compute does not "
-                   "compute per-grid vector");
-      if (nrhoindex > 0 && modify->compute[n]->size_per_grid_cols == 0)
-        error->all(FLERR,
-                   "Compute lambda/grid compute does not "
-                   "compute per-grid array");
-      if (nrhoindex > 0 && nrhoindex > modify->compute[n]->size_per_grid_cols)
-        error->all(FLERR,"Compute lambda compute vector is "
-                   "accessed out-of-range");
-    } else {
-      int n = modify->find_fix(id_nrho);
-      if (n < 0) error->all(FLERR,"Could not find compute lambda/grid fix ID");
-      if (modify->fix[n]->per_grid_flag == 0)
-        error->all(FLERR,"Compute lambda/grid fix does not "
-                   "compute per-grid info");
-      if (nrhoindex == 0 && modify->fix[n]->size_per_grid_cols > 0)
-        error->all(FLERR,"Compute lambda/grid fix does not "
-                   "compute per-grid vector");
-      if (nrhoindex > 0 && modify->fix[n]->size_per_grid_cols == 0)
-        error->all(FLERR,"Compute lambda/grid fix does not "
-                   "compute per-grid array");
-      if (nrhoindex > 0 && nrhoindex > modify->fix[n]->size_per_grid_cols)
-        error->all(FLERR,"Compute lambda/grid fix array is "
-                   "accessed out-of-range");
-    }
-  } else error->all(FLERR,"Illegal compute lambda/grid command");
+  id_temp = NULL;
 
   if (strncmp(arg[3],"c_",2) == 0 || strncmp(arg[3],"f_",2) == 0) {
     int n = strlen(arg[3]);
