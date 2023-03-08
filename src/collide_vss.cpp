@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------
    SPARTA - Stochastic PArallel Rarefied-gas Time-accurate Analyzer
    http://sparta.sandia.gov
-   Steve Plimpton, sjplimp@sandia.gov, Michael Gallis, magalli@sandia.gov
+   Steve Plimpton, sjplimp@gmail.com, Michael Gallis, magalli@sandia.gov
    Sandia National Laboratories
 
    Copyright (2014) Sandia Corporation.  Under the terms of Contract
@@ -129,8 +129,8 @@ double CollideVSS::vremax_init(int igroup, int jgroup)
 
       double cxs = params[isp][jsp].diam*params[isp][jsp].diam*MY_PI;
       prefactor[isp][jsp] = cxs * pow(2.0*update->boltz*params[isp][jsp].tref/
-	params[isp][jsp].mr,params[isp][jsp].omega-0.5) /
-	tgamma(2.5-params[isp][jsp].omega);
+        params[isp][jsp].mr,params[isp][jsp].omega-0.5) /
+        tgamma(2.5-params[isp][jsp].omega);
       double beta = MAX(vscale[isp],vscale[jsp]);
       double vrm = 2.0 * cxs * beta;
       vrmgroup = MAX(vrmgroup,vrm);
@@ -164,7 +164,7 @@ double CollideVSS::attempt_collision(int icell, int np, double volume)
 /* ---------------------------------------------------------------------- */
 
 double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
-				     double volume)
+                                     double volume)
 {
  double fnum = update->fnum;
  double dt = update->dt;
@@ -195,7 +195,7 @@ double CollideVSS::attempt_collision(int icell, int igroup, int jgroup,
 ------------------------------------------------------------------------- */
 
 int CollideVSS::test_collision(int icell, int igroup, int jgroup,
-			       Particle::OnePart *ip, Particle::OnePart *jp)
+                               Particle::OnePart *ip, Particle::OnePart *jp)
 {
   double *vi = ip->v;
   double *vj = jp->v;
@@ -347,7 +347,7 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
       ip->evib = 0;
       p3->erot = 0;
       p3->evib = 0;
-	
+
       // returned postcoln.etotal will increment only the
       //   relative translational energy between recombined species and 3rd body
       // add back partial_energy to get full total energy
@@ -374,7 +374,7 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
 /* ---------------------------------------------------------------------- */
 
 void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
-					   Particle::OnePart *jp)
+                                           Particle::OnePart *jp)
 {
   double ua,vb,wc;
   double vrc[3];
@@ -596,6 +596,81 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *ip,
           } // end of rotstyle if
         postcoln.erot += p->erot;
         }
+      }
+      postcoln.erot += p->erot;
+
+      vibdof = species[sp].vibdof;
+      double vibn_phi = species[sp].vibrel[0];
+
+      if (vibdof) {
+        if (relaxflag == VARIABLE) vibn_phi = vibrel(sp,E_Dispose+p->evib);
+        if (vibn_phi >= random->uniform()) {
+          if (vibstyle == NONE) {
+            p->evib = 0.0;
+
+          } else if (vibdof == 2) {
+            if (vibstyle == SMOOTH) {
+              E_Dispose += p->evib;
+              Fraction_Vib =
+                1.0 - pow(random->uniform(),
+                          (1.0/(2.5-params[ip->ispecies][jp->ispecies].omega)));
+              p->evib= Fraction_Vib * E_Dispose;
+              E_Dispose -= p->evib;
+
+            } else if (vibstyle == DISCRETE) {
+              E_Dispose += p->evib;
+              max_level = static_cast<int>
+                (E_Dispose / (update->boltz * species[sp].vibtemp[0]));
+              do {
+                ivib = static_cast<int>
+                  (random->uniform()*(max_level+AdjustFactor));
+                p->evib = ivib * update->boltz * species[sp].vibtemp[0];
+                State_prob = pow((1.0 - p->evib / E_Dispose),
+                                 (1.5 - params[ip->ispecies][jp->ispecies].omega));
+              } while (State_prob < random->uniform());
+              E_Dispose -= p->evib;
+            }
+
+          } else if (vibdof > 2) {
+            if (vibstyle == SMOOTH) {
+              E_Dispose += p->evib;
+              p->evib = E_Dispose *
+                sample_bl(random,0.5*species[sp].vibdof-1.0,
+                          1.5-params[ip->ispecies][jp->ispecies].omega);
+              E_Dispose -= p->evib;
+
+            } else if (vibstyle == DISCRETE) {
+              p->evib = 0.0;
+
+              int nmode = particle->species[sp].nvibmode;
+              int **vibmode =
+                particle->eiarray[particle->ewhich[index_vibmode]];
+              int pindex = p - particle->particles;
+
+              for (int imode = 0; imode < nmode; imode++) {
+                ivib = vibmode[pindex][imode];
+                E_Dispose += ivib * update->boltz *
+                  particle->species[sp].vibtemp[imode];
+                max_level = static_cast<int>
+                  (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
+
+                do {
+                  ivib = static_cast<int>
+                    (random->uniform()*(max_level+AdjustFactor));
+                  pevib = ivib * update->boltz * species[sp].vibtemp[imode];
+                  State_prob = pow((1.0 - pevib / E_Dispose),
+                                   (1.5 - params[ip->ispecies][jp->ispecies].omega));
+                } while (State_prob < random->uniform());
+
+                vibmode[pindex][imode] = ivib;
+                p->evib += pevib;
+                E_Dispose -= pevib;
+              }
+            }
+          } // end of vibstyle/vibdof if
+        }
+        postcoln.evib += p->evib;
+>>>>>>> 7be9b4d8f77747e2b9ca678fb85d0a05f36c997d
       } // end of vibdof if
     }
 
@@ -827,8 +902,8 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_Prohibdouble(Particle::OnePart *
 /* ---------------------------------------------------------------------- */
 
 void CollideVSS::SCATTER_ThreeBodyScattering(Particle::OnePart *ip,
-			  		     Particle::OnePart *jp,
-			  		     Particle::OnePart *kp)
+                                               Particle::OnePart *jp,
+                                               Particle::OnePart *kp)
 {
   double vrc[3],ua,vb,wc;
 
@@ -1263,7 +1338,7 @@ void CollideVSS::read_param_file(char *fname)
         params[isp][jsp].rotc1 = params[jsp][isp].rotc1 = atof(words[6]);
         params[isp][jsp].rotc2 = params[jsp][isp].rotc2 = atof(words[7]);
         params[isp][jsp].rotc3 = params[jsp][isp].rotc3 =
-        		(MY_PI+MY_PI2*MY_PI2)*params[isp][jsp].rotc2;
+                        (MY_PI+MY_PI2*MY_PI2)*params[isp][jsp].rotc2;
         if(params[isp][jsp].rotc2 > 0)
         	params[isp][jsp].rotc2 = params[jsp][isp].rotc2 =
         			(MY_PI*MY_PIS/2.)*sqrt(params[isp][jsp].rotc2);
@@ -1285,7 +1360,7 @@ void CollideVSS::read_param_file(char *fname)
     if (params[i][i].diam < 0.0) {
       char str[128];
       sprintf(str,"Species %s did not appear in VSS parameter file",
-	      particle->species[i].id);
+              particle->species[i].id);
       error->one(FLERR,str);
     }
   }
@@ -1294,16 +1369,16 @@ void CollideVSS::read_param_file(char *fname)
     params[i][i].mr = particle->species[i].mass / 2;
     for ( int j = i+1; j<nparams; j++) {
       params[i][j].mr = params[j][i].mr = particle->species[i].mass *
-	particle->species[j].mass / (particle->species[i].mass + particle->species[j].mass);
+        particle->species[j].mass / (particle->species[i].mass + particle->species[j].mass);
 
       if(params[i][j].diam < 0) params[i][j].diam = params[j][i].diam =
-				  0.5*(params[i][i].diam + params[j][j].diam);
+                                  0.5*(params[i][i].diam + params[j][j].diam);
       if(params[i][j].omega < 0) params[i][j].omega = params[j][i].omega =
-				   0.5*(params[i][i].omega + params[j][j].omega);
+                                   0.5*(params[i][i].omega + params[j][j].omega);
       if(params[i][j].tref < 0) params[i][j].tref = params[j][i].tref =
-				  0.5*(params[i][i].tref + params[j][j].tref);
+                                  0.5*(params[i][i].tref + params[j][j].tref);
       if(params[i][j].alpha < 0) params[i][j].alpha = params[j][i].alpha =
-				   0.5*(params[i][i].alpha + params[j][j].alpha);
+                                   0.5*(params[i][i].alpha + params[j][j].alpha);
 
       if (rotrelaxflag == PARKER) {
 	if(params[i][j].rotc1 < 0) params[i][j].rotc1 = params[j][i].rotc1 =
