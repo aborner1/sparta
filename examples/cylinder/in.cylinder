@@ -110,7 +110,7 @@ mixture             air N2 frac 1.0
 
 mixture             air vstream ${Vx} ${Vy} 0.0 temp ${temp}
 
-collide             vss all air.vss relax variable 
+collide             vss all air.vss rotrelax parker vibrelax milwhite 
 collide_modify      vremax 100 yes vibrate no rotate smooth nearcp yes 10
 
 #####################################################

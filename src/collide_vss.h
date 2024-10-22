@@ -40,6 +40,8 @@ class CollideVSS : public Collide {
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                         Particle::OnePart *&);
   double extract(int, int, const char *);
+  double * gelimd3(double mat[3][4]);
+  double * gelimd4(double mat[4][5]);
 
   struct State {      // two-particle state
     double vr2;
@@ -69,11 +71,12 @@ class CollideVSS : public Collide {
     double rotc3;
     double vibc1;
     double vibc2;
+    double park;
     double mr;
   };
 
  protected:
-  int relaxflag,eng_exchange;
+  int rotrelaxflag,vibrelaxflag,relaxtypeflag,eng_exchange;
   double vr_indice;
   double **prefactor; // static portion of collision attempt frequency
 
@@ -85,8 +88,10 @@ class CollideVSS : public Collide {
 
   void SCATTER_TwoBodyScattering(Particle::OnePart *,
                                  Particle::OnePart *);
-  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
-                                      Particle::OnePart *);
+  void EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *,
+				                                     Particle::OnePart *);
+  void EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *,
+                                                   Particle::OnePart *);
   void SCATTER_ThreeBodyScattering(Particle::OnePart *,
                                    Particle::OnePart *,
                                    Particle::OnePart *);
@@ -95,11 +100,23 @@ class CollideVSS : public Collide {
                                    Particle::OnePart *);
 
   double sample_bl(RanKnuth *, double, double);
-  double rotrel (int, double);
-  double vibrel (int, double);
+  double rotrel_parker(int, int, double);
+  double vibrel_milwhite(int, int, double, double);
+  double vibrel_milwhite_highT(int, int, double, double);
 
   void read_param_file(char *);
   int wordparse(int, char *, char **);
+
+  double * newtonTcol3(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double zrot[], double omega,
+                 double x0[],
+                 double tol,
+                 int nmax);
+  double * newtonTcol4(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double vibTempk[], double zrot[], double omega[],
+                 double x0[],
+                 double tol,
+                 int nmax);
+  double nizenkov_zvib(int nmode, double Tcol, double zeta, double VibT[]);
+  double nizenkov_dzvib(int nmode, double Tcol, double zeta, double VibT[]);
 };
 
 }

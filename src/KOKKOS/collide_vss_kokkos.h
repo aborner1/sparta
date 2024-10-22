@@ -223,10 +223,13 @@ class CollideVSSKokkos : public CollideVSS {
                                  Particle::OnePart *,
                                  struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_NonReactingEDisposal(Particle::OnePart *,
+  void EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *,
                                       Particle::OnePart *,
                                       struct State &, struct State &, rand_type &) const;
-
+  KOKKOS_INLINE_FUNCTION
+  void EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *,
+                                      Particle::OnePart *,
+                                      struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
   void SCATTER_ThreeBodyScattering(Particle::OnePart *,
                                    Particle::OnePart *,
@@ -241,9 +244,11 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   double sample_bl(rand_type &, double, double) const;
   KOKKOS_INLINE_FUNCTION
-  double rotrel (int, double) const;
+  double rotrel_parker (int, int, double) const;
   KOKKOS_INLINE_FUNCTION
-  double vibrel (int, double) const;
+  double vibrel_milwhite (int, int, double) const;
+  KOKKOS_INLINE_FUNCTION
+  double vibrel_milwhite_highT (int, int, double) const;
 
   KOKKOS_INLINE_FUNCTION
   int set_nn(int, int) const;
