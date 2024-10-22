@@ -379,7 +379,7 @@ void CollideVSSKokkos::collisions()
 
   dt = update->dt;
   fnum = update->fnum;
-  boltz = boltz;
+  boltz = update->boltz;
 
   // perform collisions:
   // variant for single group or multiple groups (not yet supported)
@@ -1622,7 +1622,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *
                 p->evib = Fraction_Vib * E_Dispose;
               } else if (vibdof > 2) {
                 p->evib = E_Dispose *
-                    sample_bl(random,0.5*d_species[sp].vibdof-1.0,
+                    sample_bl(rand_gen,0.5*d_species[sp].vibdof-1.0,
                               1.5-d_params(sp,spb).omega);
               }
               E_Dispose -= p->evib;
@@ -1720,7 +1720,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *
           } else {
             E_Dispose += p->erot;
             p->erot = E_Dispose *
-              sample_bl(random,0.5*d_species[sp].rotdof-1.0,
+              sample_bl(rand_gen,0.5*d_species[sp].rotdof-1.0,
                         1.5-d_params(sp,spb).omega);
             E_Dispose -= p->erot;
           } // end of rotstyle if
@@ -1813,7 +1813,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::One
                           p->evib = Fraction_Vib * E_Dispose;
                       }
                       else if (vibdof > 2) p->evib = E_Dispose *
-                              sample_bl(random,0.5*vibdof-1.0,1.5-d_params(sp,spb).omega);
+                              sample_bl(rand_gen,0.5*vibdof-1.0,1.5-d_params(sp,spb).omega);
                       E_Dispose -= p->evib;
                       postcoln.evib += p->evib;
                       relaxflag1 = 1;
@@ -1876,9 +1876,9 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::One
                         if (phi >= rand_gen.drand()) {
                             ivib = d_vibmode(pindex,imode);
                             E_Dispose += ivib * boltz *
-                                    particle->d_species[sp].vibtemp[imode];
+                                    d_species[sp].vibtemp[imode];
                             p->evib -= ivib * boltz *
-                                    particle->d_species[sp].vibtemp[imode];
+                                    d_species[sp].vibtemp[imode];
                             max_level = static_cast<int>
                               (E_Dispose / (boltz * d_species[sp].vibtemp[imode]));
 
@@ -1938,7 +1938,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::One
                         p->erot = Fraction_Rot * E_Dispose;
                     }
                     else if (rotdof > 2) p->erot = E_Dispose *
-                            sample_bl(random,0.5*rotdof-1.0,1.5-d_params(sp,spb).omega);
+                            sample_bl(rand_gen,0.5*rotdof-1.0,1.5-d_params(sp,spb).omega);
                     E_Dispose -= p->erot;
                     postcoln.erot += p->erot;
                     break;
@@ -2120,66 +2120,64 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     else p = kp;
 
     int sp = p->ispecies;
-    vibdof = species[sp].vibdof;
+    vibdof = d_species[sp].vibdof;
 
     if (vibdof) {
       if (vibstyle == NONE) {
         p->evib = 0.0;
       } else if (vibdof == 2 && vibstyle == DISCRETE) {
-        int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
-        int pindex = p - particle->particles;
+        auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
+        int pindex = p - d_particles.data();
         max_level = static_cast<int>
-          (E_Dispose / (update->boltz * species[sp].vibtemp[0]));
+          (E_Dispose / (boltz * d_species[sp].vibtemp[0]));
         do {
           ivib = static_cast<int>
-            (random->uniform()*(max_level+AdjustFactor));
+            (rand_gen.drand()*(max_level+AdjustFactor));
           p->evib = (double)
-            (ivib * update->boltz * species[sp].vibtemp[0]);
-          zki = (2 * species[sp].vibtemp[0] / Tcol) * (1 / (exp(species[sp].vibtemp[0]/Tcol) - 1));
+            (ivib * boltz * d_species[sp].vibtemp[0]);
+          zki = (2 * d_species[sp].vibtemp[0] / Tcol) * (1 / (exp(d_species[sp].vibtemp[0]/Tcol) - 1));
           State_prob = pow(((E_Dispose - p->evib) / (E_Dispose)),
                                  (.5 * (zc - zki) - 1.0));
-        } while (State_prob < random->uniform());
+        } while (State_prob < rand_gen.drand());
         E_Dispose -= p->evib;
         zc -= zki;
 
       } else if (vibdof == 2 && vibstyle == SMOOTH) {
         Fraction_Vib =
-          1.0 - pow(random->uniform(),(1.0 / (2.5-aveomega)));
+          1.0 - pow(rand_gen.drand(),(1.0 / (2.5-aveomega)));
         p->evib = Fraction_Vib * E_Dispose;
         E_Dispose -= p->evib;
 
       } else if (vibdof > 2 && vibstyle == SMOOTH) {
           p->evib = E_Dispose *
-          sample_bl(random,0.5*species[sp].vibdof-1.0,
+          sample_bl(rand_gen,0.5*d_species[sp].vibdof-1.0,
                    1.5-aveomega);
           E_Dispose -= p->evib;
       } else if (vibdof > 2 && vibstyle == DISCRETE) {
           p->evib = 0.0;
 
-          int nmode = particle->species[sp].nvibmode;
-          int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
-          int pindex = p - particle->particles;
+          int nmode = d_species[sp].nvibmode;
+          auto &d_vibmode = k_eiarray.d_view[d_ewhich[index_vibmode]].k_view.d_view;
+          int pindex = p - d_particles.data();
+
           double zpe = 0.0;
           for (int imode = 0; imode < nmode; imode++) {
-            zpe += 0.5 * update->boltz * species[sp].vibtemp[imode];
+            zpe += 0.5 * boltz * d_species[sp].vibtemp[imode];
           }
 
           for (int imode = 0; imode < nmode; imode++) {
-//            ivib = vibmode[pindex][imode];
-//            E_Dispose += ivib * update->boltz *
-//            particle->species[sp].vibtemp[imode];
             max_level = static_cast<int>
-            (E_Dispose / (update->boltz * species[sp].vibtemp[imode]));
+            (E_Dispose / (boltz * d_species[sp].vibtemp[imode]));
             do {
               ivib = static_cast<int>
-              (random->uniform()*(max_level+AdjustFactor));
-              pevib = ivib * update->boltz * species[sp].vibtemp[imode];
-              zki = (2 * species[sp].vibtemp[0] / Tcol) * (1 / (exp(species[sp].vibtemp[0]/Tcol) - 1));
+              (rand_gen.drand()*(max_level+AdjustFactor));
+              pevib = ivib * boltz * d_species[sp].vibtemp[imode];
+              zki = (2 * d_species[sp].vibtemp[0] / Tcol) * (1 / (exp(d_species[sp].vibtemp[0]/Tcol) - 1));
               State_prob = pow(((E_Dispose - pevib) / (E_Dispose)),
                                  (.5 * (zc - zki) - 1.0));
-            } while (State_prob < random->uniform());
+            } while (State_prob < rand_gen.drand());
 
-            vibmode[pindex][imode] = ivib;
+            d_vibmode(pindex,imode) = ivib;
             p->evib += pevib;
             E_Dispose -= pevib;
             zc -= zki;
@@ -2320,10 +2318,11 @@ double CollideVSSKokkos::rotrel_parker(int isp, int jsp, double Ec) const
 /* --------------------------------------------------------------------------------------
    compute a variable vibrational relaxation parameter using Millikan-White's expression
 ----------------------------------------------------------------------------------------- */
+
 KOKKOS_INLINE_FUNCTION
-double CollideVSS::vibrel_milwhite(int isp, int jsp, double Ec, double dofisp) const
+double CollideVSSKokkos::vibrel_milwhite(int isp, int jsp, double Ec, double dofisp) const
 {
-  double Tr = 2.0 * Ec /(boltz * dofisp);
+  double Tr = 2.0 * Ec /(update->boltz * dofisp);
   double omega = d_params(isp,jsp).omega;
   double diam = d_params(isp,jsp).diam;
   double tref = d_params(isp,jsp).tref;
@@ -2340,8 +2339,9 @@ double CollideVSS::vibrel_milwhite(int isp, int jsp, double Ec, double dofisp) c
    compute a variable vibrational relaxation parameter using Millikan-White's expression
    + Park's high temperature correction
 ----------------------------------------------------------------------------------------- */
+
 KOKKOS_INLINE_FUNCTION
-double CollideVSS::vibrel_milwhite_highT(int isp, int jsp, double Ec, double dofisp) const
+double CollideVSSKokkos::vibrel_milwhite_highT(int isp, int jsp, double Ec, double dofisp) const
 {
   double Tr = 2.0 * Ec /(boltz * dofisp);
   double omega = d_params(isp,jsp).omega;
