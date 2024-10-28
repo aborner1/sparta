@@ -2077,7 +2077,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     double aveomega123 = aveomega;
     int nvibmode[] = {d_species[isp].nvibmode, d_species[jsp].nvibmode, d_species[ksp].nvibmode};
 
-    //Need to calculate a collisional tempertature Tcol between the particles; in addition, need to find post-collisional vibrational degrees of
+    //Need to calculate a collisional temperature Tcol between the particles; in addition, need to find post-collisional vibrational degrees of
     //freedom for colliding particles; values are then used for computation of the vibrational energies, assuming each vib mode is a harmonic oscillator
     double omega[] = {aveomega12, aveomega123};
     double nrotmode[] = {(double)d_species[isp].rotdof, (double)d_species[jsp].rotdof, (double)d_species[ksp].rotdof};

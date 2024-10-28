@@ -979,7 +979,7 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
 
     int nvibmode[] = {species[isp].nvibmode, species[jsp].nvibmode};
 
-    //Need to calculate a collisional tempertature Tcol between the particles; in addition, need to find post-collisional vibrational degrees of
+    //Need to calculate a collisional temperature Tcol between the particles; in addition, need to find post-collisional vibrational degrees of
     //freedom for colliding particles; values are then used for computation of the vibrational energies, assuming each vib mode is a harmonic oscillator
 
     double nrotmode[] = {(double)species[isp].rotdof, (double)species[jsp].rotdof};
