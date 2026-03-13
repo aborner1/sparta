@@ -381,12 +381,10 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
     SCATTER_TwoBodyScattering(ip,p3);
 
   } else {
-    EEXCHANGE_ReactingEDisposal(ip,jp,kp);
-    SCATTER_TwoBodyScattering(ip,jp);
-  }
-
-  } else {
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ip,jp);
+    if (precoln.ave_dof > 0.0) {
+      if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp);
+      else EEXCHANGE_NonReactingEDisposal_Serial(ip,jp);
+    }
     SCATTER_TwoBodyScattering(ip,jp);
   }
 
