@@ -29,9 +29,11 @@
 </PRE>
 <LI>zero or more keyword/value pairs may be appended 
 
-<LI>keyword = <I>relax</I> 
+<LI>keyword = <I>rotrelax</I> or <I>vibrelax</I> or <I>relaxtype</I> 
 
-<PRE>  <I>relax</I> value = <I>constant</I> or <I>variable</I> 
+<PRE>  <I>rotrelax</I> value = <I>constant</I> or <I>boyd</I>
+  <I>vibrelax</I> value = <I>constant</I> or <I>milwhite</I> or <I>milwhite_highT</I>
+  <I>relaxtype</I> value = <I>permitdouble</I> or <I>prohibdouble</I> 
 </PRE>
 
 </UL>
@@ -39,7 +41,7 @@
 </P>
 <PRE>collide none
 collide vss all ../data/air.vss
-collide vss species all.vss relax variable 
+collide vss species all.vss rotrelax boyd vibrelax milwhite relaxtype prohibdouble 
 </PRE>
 <P><B>Description:</B>
 </P>
@@ -127,14 +129,13 @@ distribution, with a "*.css" suffix.  The file can contain species not
 used by this simulation; they will simply be ignored.  All species
 currently defined by the simulation must be present in the file.
 </P>
-<P>The format of the file depends of the setting of the optional <I>relax</I>
-keyword, as explained below.  Comments or blank lines are allowed in
-the file.  Comment lines start with a "#" character.  All other lines
-must have the following format with parameters separated by
-whitespace.
+<P>The format of the file depends on the settings of the optional <I>rotrelax</I>
+and <I>vibrelax</I> keywords, as explained below. Comments or blank lines are
+allowed in the file. Comment lines start with a "#" character. All other lines
+must have the following format with parameters separated by whitespace.
 </P>
-<P>If the <I>relax</I> keyword is specified as <I>constant</I>, which is the
-default, then each line has 4 parameters following the species ID:
+<P>The base format for a line (when both relaxations are <I>constant</I>) has 4 
+parameters following the species ID:
 </P>
 <PRE>species-ID diam omega tref alpha 
 </PRE>
@@ -159,50 +160,56 @@ collision is treated in the same constant manner for every collision,
 using the rotational and vibrational relaxation numbers from the
 species data file, as read by the <A HREF = "species.html">species</A> command.
 </P>
-<P>If the <I>relax</I> keyword is specified as <I>variable</I>, then each line has
+<P>If <I>rotrelax</I> is set to <I>boyd</I>, two additional parameters are expected 
+on each line for Boyd's rotational relaxation model <A HREF = "#Boyd">(Boyd)</A>:
+</P>
+<PRE>Zrotinf T* 
+</PRE>
+<UL><LI>Zrotinf (unitless)
+<LI>T* (temperature units) 
+</UL>
+<P>If <I>vibrelax</I> is set to <I>milwhite</I>, two additional parameters are expected
+for the Millikan-White vibrational relaxation model, which uses a semi-empirical
+correlation to determine the vibrational relaxation time:
+</P>
+<PRE>a b 
+</PRE>
+<UL><LI>a (temperature^(1/3))
+<LI>b (temperature^(-1/3)) 
+</UL>
+<P>If <I>vibrelax</I> is set to <I>milwhite_highT</I>, three additional parameters are
+expected. This adds the Park high-temperature correction, which prevents the 
+Millikan-White relaxation time from becoming unphysically small at high 
+temperatures by introducing a limiting effective vibrational cross-section:
+</P>
+<PRE>a b sigma_v 
+</PRE>
+<UL><LI>a (temperature^(1/3))
+<LI>b (temperature^(-1/3))
+<LI>sigma_v (distance^2 units)
+</UL>
+<P>Thus, if both <I>boyd</I> and <I>milwhite</I> are specified, each line expects 
 8 parameters following the species ID:
 </P>
-<PRE>species-ID diam omega tref alpha Zrotinf T* C1 C2 
+<PRE>species-ID diam omega tref alpha Zrotinf T* a b 
 </PRE>
-<P>The first 4 parameters are the same as above.  Parameters 5 and 6
-affect rotational relaxation; parameters 7 and 8 affect vibrational
-relaxation.  In this case the rotational and vibrational relaxation
-during a collision is treated as a variable and is computed for each
-collision.  This calculation is only performed for polyatomic species,
-using equations A5 and A6 on pages 413 and 414 in <A HREF = "#Bird94">(Bird94)</A>,
-with the modification that the collision temperature is calculated
-using energy in the internal mode as well as the translational mode.
-Zrotinf and T* are parameters in the numerator and denominator of eq
-A5.  C1 and C2 are in eq A6.  The units of these parameters is as
-follows:
-</P>
-<UL><LI>Zrotinf (unitless)
-<LI>T* (temperature units)
-<LI>C1 (temperature units)
-<LI>C2 (temperature^(1/3) units) 
-</UL>
-<P>Note that a collision data file with the 4 extra relaxation parameters
-(per species) can be used when the <I>relax</I> keyword is specified as
-<I>constant</I>.  In that case, the extra parameters are simply ignored.
+<P>The <I>relaxtype</I> keyword specifies how the energy exchange is performed.
+If set to <I>permitdouble</I> (the default), energy exchange is performed with particle selection permitting double relaxation.
+If set to <I>prohibdouble</I>, mutually exclusive (prohibit-double) energy 
+exchange is enforced.
 </P>
 <P>For interspecies collisions, the collision parameters default to
 the average of the parameters for each involved species.  To override
 this default, lines specific to each interspecies pair can be added
 anywhere in the collision data file.  The format for these lines is as
 described above, with the addition of a second species name.  For
-example, with the <I>relax</I> keyword specified, an interspecies
-collision line would contain the following information for collisions
-between species-ID and species-ID1:
+example, with <I>boyd</I> and <I>milwhite</I> specified, an interspecies
+collision line would contain:
 </P>
-<PRE>species-ID species-ID1 diam omega tref alpha Zrotinf T* C1 C2 
+<PRE>species-ID species-ID1 diam omega tref alpha Zrotinf T* a b 
 </PRE>
 <P>In an interspecies line, a specific parameter can be returned to the
-default behavior (an average) by making it negative.  For example, to
-override only <I>omega</I> for the above case, the line could appear as
-follows:
-</P>
-<PRE>species-ID species-ID1 -1 omega -1 -1 -1 -1 -1 -1 
-</PRE>
+default behavior (an average) by making it negative.</P>
 <HR>
 
 <P>Styles with a <I>kk</I> suffix are functionally the same as the
@@ -238,7 +245,7 @@ effectively.
 <P><B>Default:</B>
 </P>
 <P>Style = none is the default (no collisions).  If the vss style is
-specified, then relax = constant is the default.
+specified, then rotrelax = constant, vibrelax = constant, and relaxtype = permitdouble are the defaults.
 </P>
 <HR>
 
@@ -258,5 +265,11 @@ Simulation of Gas Flows, Clarendon Press, Oxford (1994).
 "Molecular gas dynamics observations of Chapman-Enskog behavior and
 departures therefrom in nonequilibrium gases," Phys Rev E, 69, 042201
 (2004).
+</P>
+
+<A NAME = "Boyd"></A>
+
+<P><B>(Boyd)</B> I. D. Boyd, "Analysis of rotational nonequilibrium in standing shock
+waves of nitrogen," AIAA Journal, 28(11), 1997-1999 (1990).
 </P>
 </HTML>
