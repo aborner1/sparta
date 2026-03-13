@@ -291,7 +291,10 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
   // just collision, no reaction
 
   if (!reaction) {
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ip,jp);
+    if (precoln.ave_dof > 0.0) {
+      if (relaxtypeflag == SERIAL) EEXCHANGE_NonReactingEDisposal_Serial(ip,jp);
+      else if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp);
+    }
     SCATTER_TwoBodyScattering(ip,jp);
     return reaction;
   }

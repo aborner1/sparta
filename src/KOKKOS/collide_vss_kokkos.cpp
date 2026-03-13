@@ -1468,7 +1468,10 @@ int CollideVSSKokkos::perform_collision_kokkos(Particle::OnePart *&ip,
   // just collision, no reaction
 
   if (!reaction) {
-    if (precoln.ave_dof > 0.0) EEXCHANGE_NonReactingEDisposal(ip,jp,precoln,postcoln,rand_gen);
+    if (precoln.ave_dof > 0.0) {
+      if (relaxtypeflag == SERIAL) EEXCHANGE_NonReactingEDisposal_Serial(ip,jp,precoln,postcoln,rand_gen);
+      else if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp,precoln,postcoln,rand_gen);
+    }
     SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
     return reaction;
   }
@@ -1555,14 +1558,7 @@ int CollideVSSKokkos::perform_collision_kokkos(Particle::OnePart *&ip,
     SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
   }
 
-  } else {
-    kp = NULL;
-    if (precoln.ave_dof > 0.0) {
-      if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp,precoln,postcoln,rand_gen);
-      else EEXCHANGE_NonReactingEDisposal_Serial(ip,jp,precoln,postcoln,rand_gen);
-    }
-    SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
-  }
+
 
   return reaction;
 }
