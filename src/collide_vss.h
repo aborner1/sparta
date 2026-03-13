@@ -40,8 +40,8 @@ class CollideVSS : public Collide {
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
                         Particle::OnePart *&);
   double extract(int, int, const char *);
-  double * gelimd3(double mat[3][4]);
-  double * gelimd4(double mat[4][5]);
+  void gelimd3(double mat[3][4], double *res);
+  void gelimd4(double mat[4][5], double *res);
 
   struct State {      // two-particle state
     double vr2;
@@ -107,14 +107,14 @@ class CollideVSS : public Collide {
   void read_param_file(char *);
   int wordparse(int, char *, char **);
 
-  double * newtonTcol3(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double zrot[], double omega,
+  void newtonTcol3(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double zrot[], double omega,
                  double x0[],
                  double tol,
-                 int nmax);
-  double * newtonTcol4(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double vibTempk[], double zrot[], double omega[],
+                 int nmax, double *x);
+  void newtonTcol4(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double vibTempk[], double zrot[], double omega[],
                  double x0[],
                  double tol,
-                 int nmax);
+                 int nmax, double *x);
   double nizenkov_zvib(int nmode, double Tcol, double zeta, double VibT[]);
   double nizenkov_dzvib(int nmode, double Tcol, double zeta, double VibT[]);
 };

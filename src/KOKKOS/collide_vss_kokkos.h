@@ -251,6 +251,19 @@ class CollideVSSKokkos : public CollideVSS {
   double vibrel_milwhite_highT (int, int, double, double) const;
 
   KOKKOS_INLINE_FUNCTION
+  void gelimd3(double mat[3][4], double *res) const;
+  KOKKOS_INLINE_FUNCTION
+  void gelimd4(double mat[4][5], double *res) const;
+  KOKKOS_INLINE_FUNCTION
+  void newtonTcol3(int n, int nmode[], double Ecol, const double vibTempi[], const double vibTempj[], double zrot[], double omega, double x0[], double tol, int nmax, double *res) const;
+  KOKKOS_INLINE_FUNCTION
+  void newtonTcol4(int n, int nmode[], double Ecol, const double vibTempi[], const double vibTempj[], const double vibTempk[], double zrot[], double omega[], double x0[], double tol, int nmax, double *res) const;
+  KOKKOS_INLINE_FUNCTION
+  double nizenkov_zvib(int nmode, double Tcol, double zeta, const double VibT[]) const;
+  KOKKOS_INLINE_FUNCTION
+  double nizenkov_dzvib(int nmode, double Tcol, double zeta, const double VibT[]) const;
+
+  KOKKOS_INLINE_FUNCTION
   int set_nn(int, int) const;
   KOKKOS_INLINE_FUNCTION
   int find_nn(rand_type &, int, int, int) const;

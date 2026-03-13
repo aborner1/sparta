@@ -962,9 +962,10 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
     double omega[] = {aveomega12, aveomega123};
     double nrotmode[] = {(double)species[isp].rotdof, (double)species[jsp].rotdof, (double)species[ksp].rotdof};
     double xguess[] = {3000.0 , 2.0 , 2.0 , 2.0};
-    double * newtinfo = newtonTcol4(4, nvibmode, postcoln.etotal, particle->species[isp].vibtemp, particle->species[jsp].vibtemp, particle->species[ksp].vibtemp, nrotmode, omega, xguess,
+    double newtinfo[4];
+    newtonTcol4(4, nvibmode, postcoln.etotal, particle->species[isp].vibtemp, particle->species[jsp].vibtemp, particle->species[ksp].vibtemp, nrotmode, omega, xguess,
                1e-4,
-               100);
+               100, newtinfo);
     Tcol = newtinfo[0];
     double zvibi = newtinfo[1];
     double zvibj = newtinfo[2];
@@ -984,9 +985,10 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
 
     double nrotmode[] = {(double)species[isp].rotdof, (double)species[jsp].rotdof};
     double xguess[] = {3000.0 , 2.0 , 2.0};
-    double * newtinfo = newtonTcol3(3, nvibmode, postcoln.etotal, particle->species[isp].vibtemp, particle->species[jsp].vibtemp, nrotmode, aveomega, xguess,
+    double newtinfo[3];
+    newtonTcol3(3, nvibmode, postcoln.etotal, particle->species[isp].vibtemp, particle->species[jsp].vibtemp, nrotmode, aveomega, xguess,
                1e-4,
-               100);
+               100, newtinfo);
     Tcol = newtinfo[0];
     double zvibi = newtinfo[1];
     double zvibj = newtinfo[2];
@@ -1376,9 +1378,8 @@ double CollideVSS::extract(int isp, int jsp, const char *name)
  *
 ------------------------------------------------------------------------- */
 
-double * CollideVSS::gelimd3(double mat[3][4])
+void CollideVSS::gelimd3(double mat[3][4], double *res)
 {
-    static double res[3];
     int i,j,k;
     int n = 3;
 
@@ -1387,7 +1388,7 @@ double * CollideVSS::gelimd3(double mat[3][4])
     {
         for(j = i+1; j < n; j++)
         {
-            float f=mat[j][i]/mat[i][i];
+            double f=mat[j][i]/mat[i][i];
             for(k = 0; k < n+1; k++) mat[j][k]=mat[j][k]-f*mat[i][k];
         }
     }
@@ -1402,14 +1403,12 @@ double * CollideVSS::gelimd3(double mat[3][4])
         }
         res[i]=res[i]/mat[i][i];
     }
-    return res;
 }
 
 /* ---------------------------------------------------------------------- */
 
-double * CollideVSS::gelimd4(double mat[4][5])
+void CollideVSS::gelimd4(double mat[4][5], double *res)
 {
-    static double res[4];
     int i,j,k;
     int n = 4;
 
@@ -1418,7 +1417,7 @@ double * CollideVSS::gelimd4(double mat[4][5])
     {
         for(j = i+1; j < n; j++)
         {
-            float f=mat[j][i]/mat[i][i];
+            double f=mat[j][i]/mat[i][i];
             for(k = 0; k < n+1; k++) mat[j][k]=mat[j][k]-f*mat[i][k];
         }
     }
@@ -1429,11 +1428,10 @@ double * CollideVSS::gelimd4(double mat[4][5])
 
         for(j = i+1; j < n; j++)
         {
-          if(i!=j) res[i]=res[i]-mat[i][j]*res[j];
+          if(i != j) res[i]=res[i]-mat[i][j]*res[j];
         }
         res[i]=res[i]/mat[i][i];
     }
-    return res;
 }
 
 
@@ -1469,27 +1467,19 @@ double CollideVSS::nizenkov_dzvib(int nmode, double Tcol, double zeta, double Vi
    compute post-reaction energy information
 ------------------------------------------------------------------------- */
 
-double * CollideVSS::newtonTcol3(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double zrot[], double omega,
+void CollideVSS::newtonTcol3(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double zrot[], double omega,
                double x0[],
                double tol,
-               int nmax)
+               int nmax, double* x)
 {
-  // FUNCTION FOR CONVERTING COLLISIONAL ENERGY TO COLLISIONAL TEMPERATURE AND POST-COLLISION VIBRATIONAL DOFS
-  // Computes Tcol and zeta_vib for particles using Newtons Search method and system of Equations from Nizenkov et al.
-  // Search for values begins at some initial values "x0" until the search reaches a tolerance level "tol".
-
   double f[3];
   double df1dx1, df1dx2, df1dx3, df1dx4, df2dx1, df3dx1, df4dx1;
-  double * x, x_prev[3];
+  double x_prev[3];
   double err[3];
   int i;
 
   double boltz = 1.38064852e-23;
 
-  // Uses Newton's method to solve for a vibrational temperature given a
-  // distribution of vibrational energy levels.
-
-  // f and df are computed for Newton's search
   f[0] = -Ecol + .5 * boltz * (x0[1]+x0[2]+zrot[0]+zrot[1]+5-(2*omega)) * x0[0];
   f[1] = nizenkov_zvib(nmode[0],x0[0],x0[1],vibTempi);
   f[2] = nizenkov_zvib(nmode[1],x0[0],x0[2],vibTempj);
@@ -1499,36 +1489,23 @@ double * CollideVSS::newtonTcol3(int n, int nmode[], double Ecol, double vibTemp
   df2dx1 = nizenkov_dzvib(nmode[0],x0[0],x0[1],vibTempi);
   df3dx1 = nizenkov_dzvib(nmode[1],x0[0],x0[2],vibTempj);
 
-  // Create Jacobian, then sends to solver
   double jac[3][4];
-  jac[0][0] = df1dx1;
-  jac[0][1] = df1dx2;
-  jac[0][2] = df1dx3;
+  jac[0][0] = df1dx1; jac[0][1] = df1dx2; jac[0][2] = df1dx3;
+  jac[1][0] = df2dx1; jac[1][1] = -1.0;   jac[1][2] = 0.0;
+  jac[2][0] = df3dx1; jac[2][1] = 0.0;    jac[2][2] = -1.0;
+  jac[0][3] = f[0];   jac[1][3] = f[1];   jac[2][3] = f[2];
+  
+  gelimd3(jac, x);
 
-  jac[1][0] = df2dx1;
-  jac[1][1] = -1.0;
-  jac[1][2] = 0.0;
-
-  jac[2][0] = df3dx1;
-  jac[2][1] = 0.0;
-  jac[2][2] = -1.0;
-
-  jac[0][3] = f[0];
-  jac[1][3] = f[1];
-  jac[2][3] = f[2];
-  x = gelimd3(jac);
-
-  // Update guesses for variables and compute error
   for (int j = 0; j < n; j++) {
      x[j] = x0[j] - x[j];
      err[j] = fabs(x[j]-x0[j]);
   }
-  if (x[0] < 0.0) x[0] = 500;  //These checks occur to correct for any negative solutions returned, which occassionally occur when the difference between the root and guess are large.
+  if (x[0] < 0.0) x[0] = 500;
   if (x[1] < 0.0) x[1] = 1.0;
   if (x[2] < 0.0) x[2] = 1.0;
   i=2;
 
-  // Continue to search for Tvib until the error is less than the tolerance:
   while(((err[0] >= tol) || (err[1] >= tol) || (err[2] >= tol)) && (i <= nmax))
   {
     for (int j = 0; j < n; j++) {
@@ -1539,65 +1516,43 @@ double * CollideVSS::newtonTcol3(int n, int nmode[], double Ecol, double vibTemp
     f[1] = nizenkov_zvib(nmode[0],x[0],x[1],vibTempi);
     f[2] = nizenkov_zvib(nmode[1],x[0],x[2],vibTempj);
 
-    df1dx1 = .5*(x[1]+x[2]+x[3])*boltz;
+    df1dx1 = .5*(x[1]+x[2])*boltz;
     df1dx2 = df1dx3 = df1dx4 = .5*x[0]*boltz;
-    df2dx1 = nizenkov_dzvib(nmode[0],x0[0],x0[1],vibTempi);
-    df3dx1 = nizenkov_dzvib(nmode[1],x0[0],x0[2],vibTempj);
+    df2dx1 = nizenkov_dzvib(nmode[0],x[0],x[1],vibTempi);
+    df3dx1 = nizenkov_dzvib(nmode[1],x[0],x[2],vibTempj);
 
-    jac[0][0] = df1dx1;
-    jac[0][1] = df1dx2;
-    jac[0][2] = df1dx3;
+    jac[0][0] = df1dx1; jac[0][1] = df1dx2; jac[0][2] = df1dx3;
+    jac[1][0] = df2dx1; jac[1][1] = -1.0;   jac[1][2] = 0.0;
+    jac[2][0] = df3dx1; jac[2][1] = 0.0;    jac[2][2] = -1.0;
+    jac[0][3] = f[0];   jac[1][3] = f[1];   jac[2][3] = f[2];
 
-    jac[1][0] = df2dx1;
-    jac[1][1] = -1.0;
-    jac[1][2] = 0.0;
-
-    jac[2][0] = df3dx1;
-    jac[2][1] = 0.0;
-    jac[2][2] = -1.0;
-
-    jac[0][3] = f[0];
-    jac[1][3] = f[1];
-    jac[2][3] = f[2];
-
-    x = gelimd3(jac);
+    gelimd3(jac, x);
 
     for (int j = 0; j < n; j++) {
        x[j] = x_prev[j] - x[j];
        err[j] = fabs(x[j]-x_prev[j]);
     }
-    if (x[0] < 0.0) x[0] = 500;  //These checks occur to correct for any negative solutions returned, which occassionally occur.
+    if (x[0] < 0.0) x[0] = 500;
     if (x[1] < 0.0) x[1] = 1.0;
     if (x[2] < 0.0) x[2] = 1.0;
     i=i+1;
-
   }
-  return x;
-
 }
 
 /* ---------------------------------------------------------------------- */
 
-double * CollideVSS::newtonTcol4(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double vibTempk[], double zrot[], double omega[],
+void CollideVSS::newtonTcol4(int n, int nmode[], double Ecol, double vibTempi[], double vibTempj[], double vibTempk[], double zrot[], double omega[],
                double x0[],
                double tol,
-               int nmax)
+               int nmax, double* x)
 {
-  // FUNCTION FOR CONVERTING COLLISIONAL ENERGY TO COLLISIONAL TEMPERATURE AND POST-COLLISION VIBRATIONAL DOFS
-  // Computes Tcol and zeta_vib for particles using Newtons Search method and system of Equations from Nizenkov et al.
-  // Search for values begins at some initial values "x0" until the search reaches a tolerance level "tol".
-
   double f[4];
   double df1dx1, df1dx2, df1dx3, df1dx4, df2dx1, df3dx1, df4dx1;
-  double * x, x_prev[4];
+  double x_prev[4];
   double err[4];
   int i;
   double boltz = 1.38064852e-23;
-  //std::cout << "Now inside newtonTcol function" << std::endl;
-  // Uses Newton's method to solve for a vibrational temperature given a
-  // distribution of vibrational energy levels.
 
-  // f and df are computed for Newton's search
   f[0] = -Ecol + .5 * boltz * (x0[1]+x0[2]+x0[3]+zrot[0]+zrot[1]+zrot[2]+10 - 2*(omega[0]+omega[1])) * x0[0];
   f[1] = nizenkov_zvib(nmode[0],x0[0],x0[1],vibTempi);
   f[2] = nizenkov_zvib(nmode[1],x0[0],x0[2],vibTempj);
@@ -1609,47 +1564,25 @@ double * CollideVSS::newtonTcol4(int n, int nmode[], double Ecol, double vibTemp
   df3dx1 = nizenkov_dzvib(nmode[1],x0[0],x0[2],vibTempj);
   df4dx1 = nizenkov_dzvib(nmode[2],x0[0],x0[3],vibTempk);
 
-  // Create Jacobian, then sends to solver
-
   double jac[4][5];
-  jac[0][0] = df1dx1;
-  jac[0][1] = df1dx2;
-  jac[0][2] = df1dx3;
-  jac[0][3] = df1dx4;
+  jac[0][0] = df1dx1; jac[0][1] = df1dx2; jac[0][2] = df1dx3; jac[0][3] = df1dx4;
+  jac[1][0] = df2dx1; jac[1][1] = -1.0;   jac[1][2] = 0.0;    jac[1][3] = 0.0;
+  jac[2][0] = df3dx1; jac[2][1] = 0.0;    jac[2][2] = -1.0;   jac[2][3] = 0.0;
+  jac[3][0] = df4dx1; jac[3][1] = 0.0;    jac[3][2] = 0.0;    jac[3][3] = -1.0;
+  jac[0][4] = f[0];   jac[1][4] = f[1];   jac[2][4] = f[2];   jac[3][4] = f[3];
+  
+  gelimd4(jac, x);
 
-  jac[1][0] = df2dx1;
-  jac[1][1] = -1.0;
-  jac[1][2] = 0.0;
-  jac[1][3] = 0.0;
-
-  jac[2][0] = df3dx1;
-  jac[2][1] = 0.0;
-  jac[2][2] = -1.0;
-  jac[2][3] = 0.0;
-
-  jac[3][0] = df4dx1;
-  jac[3][1] = 0.0;
-  jac[3][2] = 0.0;
-  jac[3][3] = -1.0;
-
-  jac[0][4] = f[0];
-  jac[1][4] = f[1];
-  jac[2][4] = f[2];
-  jac[3][4] = f[3];
-  x = gelimd4(jac);
-
-  // Update guesses for variables and compute error
   for (int j = 0; j < n; j++) {
      x[j] = x0[j] - x[j];
      err[j] = fabs(x[j]-x0[j]);
   }
-  if (x[0] < 0.0) x[0] = 500;  //These checks occur to correct for any negative solutions returned, which occassionally occur.
+  if (x[0] < 0.0) x[0] = 500;
   if (x[1] < 0.0) x[1] = 1.0;
   if (x[2] < 0.0) x[2] = 1.0;
   if (x[3] < 0.0) x[3] = 1.0;
   i=2;
 
-  // Continue to search for Tvib until the error is less than the tolerance:
   while(((err[0] >= tol) || (err[1] >= tol) || (err[2] >= tol) || (err[3] >= tol)) && (i <= nmax))
   {
     for (int j = 0; j < n; j++) {
@@ -1662,48 +1595,26 @@ double * CollideVSS::newtonTcol4(int n, int nmode[], double Ecol, double vibTemp
 
     df1dx1 = .5*(x[1]+x[2]+x[3])*boltz;
     df1dx2 = df1dx3 = df1dx4 = .5*x[0]*boltz;
-    df2dx1 = nizenkov_dzvib(nmode[0],x0[0],x0[1],vibTempi);
-    df3dx1 = nizenkov_dzvib(nmode[1],x0[0],x0[2],vibTempj);
+    df2dx1 = nizenkov_dzvib(nmode[0],x[0],x[1],vibTempi);
+    df3dx1 = nizenkov_dzvib(nmode[1],x[0],x[2],vibTempj);
     df4dx1 = nizenkov_dzvib(nmode[2],x0[0],x0[3],vibTempk);
 
-    jac[0][0] = df1dx1;
-    jac[0][1] = df1dx2;
-    jac[0][2] = df1dx3;
-    jac[0][3] = df1dx4;
+    jac[0][0] = df1dx1; jac[0][1] = df1dx2; jac[0][2] = df1dx3; jac[0][3] = df1dx4;
+    jac[1][0] = df2dx1; jac[1][1] = -1.0;   jac[1][2] = 0.0;    jac[1][3] = 0.0;
+    jac[2][0] = df3dx1; jac[2][1] = 0.0;    jac[2][2] = -1.0;   jac[2][3] = 0.0;
+    jac[3][0] = df4dx1; jac[3][1] = 0.0;    jac[3][2] = 0.0;    jac[3][3] = -1.0;
+    jac[0][4] = f[0];   jac[1][4] = f[1];   jac[2][4] = f[2];   jac[3][4] = f[3];
 
-    jac[1][0] = df2dx1;
-    jac[1][1] = -1.0;
-    jac[1][2] = 0.0;
-    jac[1][3] = 0.0;
-
-    jac[2][0] = df3dx1;
-    jac[2][1] = 0.0;
-    jac[2][2] = -1.0;
-    jac[2][3] = 0.0;
-
-    jac[3][0] = df4dx1;
-    jac[3][1] = 0.0;
-    jac[3][2] = 0.0;
-    jac[3][3] = -1.0;
-
-    jac[0][4] = f[0];
-    jac[1][4] = f[1];
-    jac[2][4] = f[2];
-    jac[3][4] = f[3];
-
-    x = gelimd4(jac);
+    gelimd4(jac, x);
 
     for (int j = 0; j < n; j++) {
        x[j] = x_prev[j] - x[j];
        err[j] = fabs(x[j]-x_prev[j]);
     }
-    if (x[0] < 0.0) x[0] = 500;  //These checks occur to correct for any negative solutions returned, which occassionally occur.
+    if (x[0] < 0.0) x[0] = 500;
     if (x[1] < 0.0) x[1] = 1.0;
     if (x[2] < 0.0) x[2] = 1.0;
     if (x[3] < 0.0) x[3] = 1.0;
     i=i+1;
-
   }
-  return x;
-
 }
