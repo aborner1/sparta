@@ -89,7 +89,7 @@ class CollideVSS : public Collide {
 
   void SCATTER_TwoBodyScattering(Particle::OnePart *,
                                  Particle::OnePart *);
-  void EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *,
+  void EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::OnePart *,
 				                                     Particle::OnePart *);
   void EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *,
                                                    Particle::OnePart *);
@@ -101,7 +101,7 @@ class CollideVSS : public Collide {
                                    Particle::OnePart *);
 
   double sample_bl(RanKnuth *, double, double);
-  double rotrel_parker(int, int, double);
+  double rotrel_boyd(int, int, double);
   double vibrel_milwhite(int, int, double, double);
   double vibrel_milwhite_highT(int, int, double, double);
 

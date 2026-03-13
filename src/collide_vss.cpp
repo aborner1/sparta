@@ -34,9 +34,9 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{NONE,DISCRETE,SMOOTH};            // several files
-enum{CONSTANTROT,PARKER};
+enum{CONSTANTROT,BOYD};
 enum{CONSTANTVIB,MILWHITE,MILWHITEHIGHT};
-enum{SERIAL,PROHIBDOUBLE};
+enum{PERMITDOUBLE,PROHIBDOUBLE};
 
 #define MAXLINE 1024
 
@@ -51,14 +51,14 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
 
   rotrelaxflag = CONSTANTROT;
   vibrelaxflag = CONSTANTVIB;
-  relaxtypeflag = SERIAL;
+  relaxtypeflag = PERMITDOUBLE;
 
   int iarg = 3;
   while (iarg < narg) {
     if (strcmp(arg[iarg],"rotrelax") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
       if (strcmp(arg[iarg+1],"constant") == 0) rotrelaxflag = CONSTANTROT;
-      else if (strcmp(arg[iarg+1],"parker") == 0) rotrelaxflag = PARKER;
+      else if (strcmp(arg[iarg+1],"boyd") == 0) rotrelaxflag = BOYD;
       else error->all(FLERR,"Illegal collide command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"vibrelax") == 0) {
@@ -70,7 +70,7 @@ CollideVSS::CollideVSS(SPARTA *sparta, int narg, char **arg) :
         iarg += 2;
     } else if (strcmp(arg[iarg],"relaxtype") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal collide command");
-      if (strcmp(arg[iarg+1],"serial") == 0) relaxtypeflag = SERIAL;
+      if (strcmp(arg[iarg+1],"permitdouble") == 0) relaxtypeflag = PERMITDOUBLE;
       else if (strcmp(arg[iarg+1],"prohibdouble") == 0) relaxtypeflag = PROHIBDOUBLE;
       else error->all(FLERR,"Illegal collide command");
       iarg += 2;	  
@@ -292,7 +292,7 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
 
   if (!reaction) {
     if (precoln.ave_dof > 0.0) {
-      if (relaxtypeflag == SERIAL) EEXCHANGE_NonReactingEDisposal_Serial(ip,jp);
+      if (relaxtypeflag == PERMITDOUBLE) EEXCHANGE_NonReactingEDisposal_PermitDouble(ip,jp);
       else if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp);
     }
     SCATTER_TwoBodyScattering(ip,jp);
@@ -386,7 +386,7 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
   } else {
     if (precoln.ave_dof > 0.0) {
       if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp);
-      else EEXCHANGE_NonReactingEDisposal_Serial(ip,jp);
+      else EEXCHANGE_NonReactingEDisposal_PermitDouble(ip,jp);
     }
     SCATTER_TwoBodyScattering(ip,jp);
   }
@@ -454,7 +454,7 @@ void CollideVSS::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
 
 /* ---------------------------------------------------------------------- */
 
-void CollideVSS::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *ip,
+void CollideVSS::EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::OnePart *ip,
                                                 Particle::OnePart *jp)
 {
 
@@ -598,7 +598,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *ip,
       rotdof = species[sp].rotdof;
 
       if (rotdof) {
-        if (rotrelaxflag == PARKER) rotn_phi = (1.0 + rotdof/transdof)*rotrel_parker(sp,spb,E_Dispose+p->erot);
+        if (rotrelaxflag == BOYD) rotn_phi = (1.0 + rotdof/transdof)*rotrel_boyd(sp,spb,E_Dispose+p->erot);
         else rotn_phi = (1.0 + rotdof/transdof)*species[sp].rotrel;
 
         if (rotn_phi >= random->uniform()) {
@@ -820,7 +820,7 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::OnePart *
                 p->erot = 0.0;
             } else {
                 factor *= 1/(1-phi);
-                if (rotrelaxflag == PARKER) phi = factor*(1.0 + rotdof/transdof)*rotrel_parker(sp,spb,E_Dispose+p->erot);
+                if (rotrelaxflag == BOYD) phi = factor*(1.0 + rotdof/transdof)*rotrel_boyd(sp,spb,E_Dispose+p->erot);
                 else phi = factor*(1.0 + rotdof/transdof)*species[sp].rotrel;
 
                 if (phi >= random->uniform()) {
@@ -1135,10 +1135,10 @@ double CollideVSS::sample_bl(RanKnuth *random, double Exp_1, double Exp_2)
 }
 
 /* ---------------------------------------------------------------------------
-   compute a variable rotational relaxation parameter using Parker's formula
+   compute a variable rotational relaxation parameter using Boyd's formula
 ------------------------------------------------------------------------------ */
 
-double CollideVSS::rotrel_parker(int isp, int jsp, double Ec)
+double CollideVSS::rotrel_boyd(int isp, int jsp, double Ec)
 {
   Particle::Species *species = particle->species;
   double omega = params[isp][jsp].omega;
@@ -1228,7 +1228,7 @@ void CollideVSS::read_param_file(char *fname)
   // all other lines must have at least REQWORDS, which depends on VARIABLE flag
 
   int REQWORDS = 5;
-  if (rotrelaxflag == PARKER) REQWORDS += 2;
+  if (rotrelaxflag == BOYD) REQWORDS += 2;
   if (vibrelaxflag == MILWHITE) REQWORDS += 2;
   else if (vibrelaxflag == MILWHITEHIGHT) REQWORDS += 3;
 
@@ -1258,7 +1258,7 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][isp].omega = atof(words[2]);
       params[isp][isp].tref = atof(words[3]);
       params[isp][isp].alpha = atof(words[4]);
-      if (rotrelaxflag == PARKER) {
+      if (rotrelaxflag == BOYD) {
         params[isp][isp].rotc1 = atof(words[5]);
         params[isp][isp].rotc2 = atof(words[6]);
         params[isp][isp].rotc3 = (MY_PI+MY_PI2*MY_PI2)*params[isp][isp].rotc2;
@@ -1276,7 +1276,7 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][jsp].omega = params[jsp][isp].omega = atof(words[3]);
       params[isp][jsp].tref = params[jsp][isp].tref = atof(words[4]);
       params[isp][jsp].alpha = params[jsp][isp].alpha = atof(words[5]);
-      if (rotrelaxflag == PARKER) {
+      if (rotrelaxflag == BOYD) {
         params[isp][jsp].rotc1 = params[jsp][isp].rotc1 = atof(words[6]);
         params[isp][jsp].rotc2 = params[jsp][isp].rotc2 = atof(words[7]);
         params[isp][jsp].rotc3 = params[jsp][isp].rotc3 =
@@ -1322,7 +1322,7 @@ void CollideVSS::read_param_file(char *fname)
       if(params[i][j].alpha < 0) params[i][j].alpha = params[j][i].alpha =
                                    0.5*(params[i][i].alpha + params[j][j].alpha);
 
-      if (rotrelaxflag == PARKER) {
+      if (rotrelaxflag == BOYD) {
 	      if(params[i][j].rotc1 < 0) params[i][j].rotc1 = params[j][i].rotc1 =
 				     0.5*(params[i][i].rotc1 + params[j][j].rotc1);
 	      if(params[i][j].rotc2 < 0) params[i][j].rotc2 = params[j][i].rotc2 =

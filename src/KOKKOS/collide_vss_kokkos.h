@@ -223,7 +223,7 @@ class CollideVSSKokkos : public CollideVSS {
                                  Particle::OnePart *,
                                  struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
-  void EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *,
+  void EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::OnePart *,
                                       Particle::OnePart *,
                                       struct State &, struct State &, rand_type &) const;
   KOKKOS_INLINE_FUNCTION
@@ -244,7 +244,7 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   double sample_bl(rand_type &, double, double) const;
   KOKKOS_INLINE_FUNCTION
-  double rotrel_parker (int, int, double) const;
+  double rotrel_boyd (int, int, double) const;
   KOKKOS_INLINE_FUNCTION
   double vibrel_milwhite (int, int, double, double) const;
   KOKKOS_INLINE_FUNCTION

@@ -38,9 +38,9 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{NONE,DISCRETE,SMOOTH};            // several files
-enum{CONSTANTROT,PARKER};
+enum{CONSTANTROT,BOYD};
 enum{CONSTANTVIB,MILWHITE,MILWHITEHIGHT};
-enum{SERIAL,PROHIBDOUBLE};
+enum{PERMITDOUBLE,PROHIBDOUBLE};
 
 #define DELTAGRID 1000            // must be bigger than split cells per cell
 #define DELTADELETE 1024
@@ -1469,7 +1469,7 @@ int CollideVSSKokkos::perform_collision_kokkos(Particle::OnePart *&ip,
 
   if (!reaction) {
     if (precoln.ave_dof > 0.0) {
-      if (relaxtypeflag == SERIAL) EEXCHANGE_NonReactingEDisposal_Serial(ip,jp,precoln,postcoln,rand_gen);
+      if (relaxtypeflag == PERMITDOUBLE) EEXCHANGE_NonReactingEDisposal_PermitDouble(ip,jp,precoln,postcoln,rand_gen);
       else if (relaxtypeflag == PROHIBDOUBLE) EEXCHANGE_NonReactingEDisposal_ProhibDouble(ip,jp,precoln,postcoln,rand_gen);
     }
     SCATTER_TwoBodyScattering(ip,jp,precoln,postcoln,rand_gen);
@@ -1626,7 +1626,7 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(Particle::OnePart *ip,
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *ip,
+void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::OnePart *ip,
                                                             Particle::OnePart *jp,
                                                             struct State &precoln, struct State &postcoln,
                                                             rand_type &rand_gen) const
@@ -1769,7 +1769,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_Serial(Particle::OnePart *
       rotdof = d_species[sp].rotdof;
 
       if (rotdof) {
-        if (rotrelaxflag == PARKER) rotn_phi = (1.0 + rotdof/transdof)*rotrel_parker(sp,spb,E_Dispose+p->erot);
+        if (rotrelaxflag == BOYD) rotn_phi = (1.0 + rotdof/transdof)*rotrel_boyd(sp,spb,E_Dispose+p->erot);
         else rotn_phi = (1.0 + rotdof/transdof)*d_species[sp].rotrel;
 
         if (rotn_phi >= rand_gen.drand()) {
@@ -1992,7 +1992,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::One
                 p->erot = 0.0;
             } else {
                 factor *= 1/(1-phi);
-                if (rotrelaxflag == PARKER) phi = factor*(1.0 + rotdof/transdof)*rotrel_parker(sp,spb,E_Dispose+p->erot);
+                if (rotrelaxflag == BOYD) phi = factor*(1.0 + rotdof/transdof)*rotrel_boyd(sp,spb,E_Dispose+p->erot);
                 else phi = factor*(1.0 + rotdof/transdof)*d_species[sp].rotrel;
 
                 if (phi >= rand_gen.drand()) {
@@ -2605,7 +2605,7 @@ double CollideVSSKokkos::sample_bl(rand_type &rand_gen, double Exp_1, double Exp
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double CollideVSSKokkos::rotrel_parker(int isp, int jsp, double Ec) const
+double CollideVSSKokkos::rotrel_boyd(int isp, int jsp, double Ec) const
 {
   double omega = d_params(isp,jsp).omega;
   double rotdof_isp = d_species[isp].rotdof/2.0;
