@@ -35,10 +35,11 @@ class CollideVSS : public Collide {
   double vremax_init(int, int);
   virtual double attempt_collision(int, int, double);
   double attempt_collision(int, int, int, double);
-  virtual int test_collision(int, int, int, Particle::OnePart *, Particle::OnePart *);
+  virtual int test_collision(int, int, int, Particle::OnePart *,
+                             Particle::OnePart *);
   virtual void setup_collision(Particle::OnePart *, Particle::OnePart *);
   virtual int perform_collision(Particle::OnePart *&, Particle::OnePart *&,
-                        Particle::OnePart *&);
+                                Particle::OnePart *&);
   double extract(int, int, const char *);
   void gelimd3(double mat[3][4], double *res);
   void gelimd4(double mat[4][5], double *res);
