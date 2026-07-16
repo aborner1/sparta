@@ -171,10 +171,10 @@ endif()
 
 if(PKG_KOKKOS)
 
-  # As of version 4.0.0 Kokkos requires C++17
-  if(CMAKE_CXX_STANDARD LESS 17)
+  # As of version 5.0.0 Kokkos requires C++20
+  if(CMAKE_CXX_STANDARD LESS 20)
     message(FATAL_ERROR "The KOKKOS package requires the C++ standard to
-  be set to at least C++17")
+  be set to at least C++20")
   endif()
 
 ########################################################################
@@ -200,6 +200,13 @@ endif()
   list(APPEND TARGET_SPARTA_PKGS ${TARGET_SPARTA_PKG_KOKKOS})
   set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS
                                        ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+  # SPARTA_KOKKOS_EXACT makes the KOKKOS package reproduce non-KOKKOS results
+  # exactly, which allows the KOKKOS build to be regression tested against the
+  # existing (non-KOKKOS) gold-standard log files.
+  if(SPARTA_KOKKOS_EXACT)
+    set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_EXACT
+                                         ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+  endif()
   # PKG_KOKKOS depends on BUILD_KOKKOS
   set(BUILD_KOKKOS ON)
 endif()

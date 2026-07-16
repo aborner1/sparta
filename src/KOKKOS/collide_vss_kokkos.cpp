@@ -33,6 +33,7 @@
 #include "modify.h"
 #include "fix.h"
 #include "fix_ambipolar.h"
+#include "fix_ambipolar_kokkos.h"
 
 using namespace SPARTA_NS;
 using namespace MathConst;
@@ -48,6 +49,7 @@ enum{PERMITDOUBLE,PROHIBDOUBLE};
 #define DELTACELLCOUNT 2
 
 #define MAXLINE 1024
+#define EPSZERO 1.0e-14
 #define BIG 1.0e20
 
 /* ---------------------------------------------------------------------- */
@@ -271,6 +273,8 @@ void CollideVSSKokkos::init()
       if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
     FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
     ambispecies = afix->especies;
+    FixAmbipolarKokkos *afix_kk = (FixAmbipolarKokkos *) afix;
+    d_ions = afix_kk->d_ions;
   }
 
   // if ambipolar and multiple groups in mixture, ambispecies must be its own group
@@ -282,6 +286,16 @@ void CollideVSSKokkos::init()
       error->all(FLERR,"Multigroup ambipolar collisions require "
                  "electrons be their own group");
   }
+
+  // warn if ambipolar and a single group (e.g. collide ... all)
+  // the light electrons inflate the single-group vremax, so many more
+  //   collision attempts are made than with a per-species grouping
+  // grouping electrons separately (e.g. collide ... species) is far faster
+
+  if (ambiflag && mixture->ngroup == 1)
+    error->warning(FLERR,"Single-group ambipolar collisions are inefficient; "
+                   "grouping electrons separately (e.g. collide ... species) "
+                   "is recommended");
 
   // vre_next = next timestep to zero vremax & remain, based on vre_every
 
@@ -1385,6 +1399,12 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
   double dv  = vi[1] - vj[1];
   double dw  = vi[2] - vj[2];
   double vr2 = du*du + dv*dv + dw*dw;
+
+  // prevent division by zero
+
+  if (vr2 < EPSZERO && d_params(ispecies,jspecies).omega >= 1.0)
+    return 0;
+
   double vro  = pow(vr2,1.0-d_params(ispecies,jspecies).omega);
 
   // although the vremax is calcualted for the group,
@@ -2803,9 +2823,20 @@ void CollideVSSKokkos::ambi_reset_kokkos(int i, int j, int jsp, int index_kpart,
 
   if (kp) {
     int k = index_kpart;
-    d_ionambi[k] = 0;
-    if (jsp != e) return;
 
+    // no electron reactant: I/J order is not canonical if an ion is the
+    // third body (e.g. AB + C+ -> A + C+ + B), so sync each product's
+    // ion flag to its post-reaction species
+    // also correct for all-neutral dissociation, where flags stay 0
+
+    if (jsp != e) {
+      d_ionambi[i] = d_ions[ip->ispecies];
+      d_ionambi[j] = d_ions[jp->ispecies];
+      d_ionambi[k] = d_ions[kp->ispecies];
+      return;
+    }
+
+    d_ionambi[k] = 0;
     if (d_ionambi[i]) {                // nothing to change
     } else if (kp->ispecies == e) {
       d_ionambi[i] = 1;                // 1st reactant is now 1st product ion
@@ -2828,7 +2859,8 @@ void CollideVSSKokkos::ambi_reset_kokkos(int i, int j, int jsp, int index_kpart,
   // ambi reaction if J reactant is electron
 
   } else if (!jp) {
-    if (jsp == e) d_ionambi[i] = 0;   // 1st reactant is now 1st product neutral
+    if (jsp == e) d_ionambi[i] = 0;   // R: A+ + e -> A, 1st product neutral
+    else d_ionambi[i] = d_ions[ip->ispecies];  // sync product to its species
   }
 }
 

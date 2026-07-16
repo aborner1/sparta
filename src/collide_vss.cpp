@@ -39,6 +39,7 @@ enum{CONSTANTVIB,MILWHITE,MILWHITEHIGHT};
 enum{PERMITDOUBLE,PROHIBDOUBLE};
 
 #define MAXLINE 1024
+#define EPSZERO 1.0e-14
 
 /* ---------------------------------------------------------------------- */
 
@@ -213,7 +214,13 @@ int CollideVSS::test_collision(int icell, int igroup, int jgroup,
   double dv  = vi[1] - vj[1];
   double dw  = vi[2] - vj[2];
   double vr2 = du*du + dv*dv + dw*dw;
-  double vro  = pow(vr2,1.0-params[ispecies][jspecies].omega);
+
+  // prevent division by zero
+
+  if (vr2 < EPSZERO && params[ispecies][jspecies].omega >= 1.0)
+    return 0;
+
+  double vro = pow(vr2,1.0-params[ispecies][jspecies].omega);
 
   // although the vremax is calculated for the group,
   // the individual collisions calculated species dependent vre
