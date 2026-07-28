@@ -70,6 +70,7 @@ class CollideVSS : public Collide {
     double rotc1;
     double rotc2;
     double rotc3;
+    double tstar;
     double vibc1;
     double vibc2;
     double park;
@@ -101,6 +102,7 @@ class CollideVSS : public Collide {
                                    Particle::OnePart *);
 
   double sample_bl(RanKnuth *, double, double);
+  double rotrel_parker(int, int, double);
   double rotrel_boyd(int, int, double);
   double vibrel_milwhite(int, int, double, double);
   double vibrel_milwhite_highT(int, int, double, double);
