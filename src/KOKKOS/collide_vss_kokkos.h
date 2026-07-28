@@ -245,24 +245,15 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   double sample_bl(rand_type &, double, double) const;
   KOKKOS_INLINE_FUNCTION
+  double eff_vib_dof(double, double) const;
+  KOKKOS_INLINE_FUNCTION
+  double vib_pool_temp(double, int, double *, double) const;
+  KOKKOS_INLINE_FUNCTION
   double rotrel_boyd (int, int, double) const;
   KOKKOS_INLINE_FUNCTION
   double vibrel_milwhite (int, int, double, double) const;
   KOKKOS_INLINE_FUNCTION
   double vibrel_milwhite_highT (int, int, double, double) const;
-
-  KOKKOS_INLINE_FUNCTION
-  void gelimd3(double mat[3][4], double *res) const;
-  KOKKOS_INLINE_FUNCTION
-  void gelimd4(double mat[4][5], double *res) const;
-  KOKKOS_INLINE_FUNCTION
-  void newtonTcol3(int n, int nmode[], double Ecol, const double vibTempi[], const double vibTempj[], double zrot[], double omega, double x0[], double tol, int nmax, double *res) const;
-  KOKKOS_INLINE_FUNCTION
-  void newtonTcol4(int n, int nmode[], double Ecol, const double vibTempi[], const double vibTempj[], const double vibTempk[], double zrot[], double omega[], double x0[], double tol, int nmax, double *res) const;
-  KOKKOS_INLINE_FUNCTION
-  double nizenkov_zvib(int nmode, double Tcol, double zeta, const double VibT[]) const;
-  KOKKOS_INLINE_FUNCTION
-  double nizenkov_dzvib(int nmode, double Tcol, double zeta, const double VibT[]) const;
 
   KOKKOS_INLINE_FUNCTION
   int set_nn(int, int) const;
