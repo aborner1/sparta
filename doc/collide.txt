@@ -23,7 +23,7 @@ args = arguments for that style :l
     file = filename that lists species with their VSS model parameters :pre
 zero or more keyword/value pairs may be appended :l
 keyword = {rotrelax} or {vibrelax} or {relaxtype} :l
-  {rotrelax} value = {constant} or {boyd}
+  {rotrelax} value = {constant}, {parker}, or {boyd}
   {vibrelax} value = {constant} or {milwhite} or {milwhite_highT}
   {relaxtype} value = {permitdouble} or {prohibdouble} :pre
 :ule
@@ -151,8 +151,9 @@ collision is treated in the same constant manner for every collision,
 using the rotational and vibrational relaxation numbers from the
 species data file, as read by the "species"_species.html command.
 
-If {rotrelax} is set to {boyd}, two additional parameters are expected 
-on each line for Boyd's rotational relaxation model "(Boyd)"_#Boyd:
+If {rotrelax} is set to {parker} or {boyd}, two additional parameters are
+expected on each line. They are used by the selected Parker or Boyd rotational
+relaxation model; the Boyd model is described in "(Boyd)"_#Boyd:
 
 Zrotinf T* :pre
 
@@ -178,6 +179,11 @@ a b sigma_v :pre
 a (temperature^(1/3))
 b (temperature^(-1/3))
 sigma_v (distance^2 units) :ul
+
+Enabled optional parameter groups are appended in the order shown above:
+rotational parameters first, followed by vibrational parameters. Thus, a
+{vibrelax} model can be used independently: its parameters immediately follow
+{alpha} when {rotrelax} is {constant}.
 
 Thus, if both {boyd} and {milwhite} are specified, each line expects 
 8 parameters following the species ID:

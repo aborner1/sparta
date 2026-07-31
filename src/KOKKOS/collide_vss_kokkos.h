@@ -249,6 +249,8 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   double vib_pool_temp(double, int, double *, double) const;
   KOKKOS_INLINE_FUNCTION
+  double rotrel_parker (int, int, double) const;
+  KOKKOS_INLINE_FUNCTION
   double rotrel_boyd (int, int, double) const;
   KOKKOS_INLINE_FUNCTION
   double vibrel_milwhite (int, int, double, double) const;

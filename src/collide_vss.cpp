@@ -1314,10 +1314,11 @@ void CollideVSS::read_param_file(char *fname)
   // skip blank lines or comment lines starting with '#'
   // all other lines must have at least REQWORDS, which depends on VARIABLE flag
 
-  int REQWORDS = 5;
-  if (rotrelaxflag == BOYD || rotrelaxflag == PARKER) REQWORDS += 2;
-  if (vibrelaxflag == MILWHITE) REQWORDS += 2;
-  else if (vibrelaxflag == MILWHITEHIGHT) REQWORDS += 3;
+  const int nrotwords =
+    (rotrelaxflag == BOYD || rotrelaxflag == PARKER) ? 2 : 0;
+  const int nvibwords = (vibrelaxflag == MILWHITE) ? 2 :
+    (vibrelaxflag == MILWHITEHIGHT) ? 3 : 0;
+  const int REQWORDS = 5 + nrotwords + nvibwords;
 
   char **words = new char*[REQWORDS+1]; // one extra word in cross-species lines
   char line[MAXLINE];
@@ -1345,17 +1346,18 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][isp].omega = atof(words[2]);
       params[isp][isp].tref = atof(words[3]);
       params[isp][isp].alpha = atof(words[4]);
-      if (rotrelaxflag == PARKER || rotrelaxflag == BOYD) {
+      if (nrotwords) {
         params[isp][isp].rotc1 = atof(words[5]);
         params[isp][isp].tstar = atof(words[6]);
         params[isp][isp].rotc3 = (MY_PI+MY_PI2*MY_PI2)*params[isp][isp].tstar;
         params[isp][isp].rotc2 = (MY_PI*MY_PIS/2.)*sqrt(params[isp][isp].tstar);
        }
-       if ((vibrelaxflag == MILWHITE) || (vibrelaxflag == MILWHITEHIGHT)) {
-         params[isp][isp].vibc1 = atof(words[7]);
-         params[isp][isp].vibc2 = atof(words[8]);
+       if (nvibwords) {
+         params[isp][isp].vibc1 = atof(words[5+nrotwords]);
+         params[isp][isp].vibc2 = atof(words[6+nrotwords]);
        }
-       if (vibrelaxflag == MILWHITEHIGHT) params[isp][isp].park = atof(words[9]);
+       if (vibrelaxflag == MILWHITEHIGHT)
+         params[isp][isp].park = atof(words[7+nrotwords]);
     } else {
       if (nwords < REQWORDS+1)  // one extra word in cross-species lines
         error->one(FLERR,"Incorrect line format in VSS parameter file");
@@ -1363,7 +1365,7 @@ void CollideVSS::read_param_file(char *fname)
       params[isp][jsp].omega = params[jsp][isp].omega = atof(words[3]);
       params[isp][jsp].tref = params[jsp][isp].tref = atof(words[4]);
       params[isp][jsp].alpha = params[jsp][isp].alpha = atof(words[5]);
-      if (rotrelaxflag == PARKER || rotrelaxflag == BOYD) {
+      if (nrotwords) {
         params[isp][jsp].rotc1 = params[jsp][isp].rotc1 = atof(words[6]);
         params[isp][jsp].tstar = params[jsp][isp].tstar = atof(words[7]);
         params[isp][jsp].rotc3 = params[jsp][isp].rotc3 =
@@ -1372,11 +1374,15 @@ void CollideVSS::read_param_file(char *fname)
           params[isp][jsp].rotc2 = params[jsp][isp].rotc2 =
                   (MY_PI*MY_PIS/2.)*sqrt(params[isp][jsp].tstar);
       }
-      if ((vibrelaxflag == MILWHITE) || (vibrelaxflag == MILWHITEHIGHT)) {
-        params[isp][jsp].vibc1 = params[jsp][isp].vibc1= atof(words[8]);
-        params[isp][jsp].vibc2 = params[jsp][isp].vibc2= atof(words[9]);
+      if (nvibwords) {
+        params[isp][jsp].vibc1 = params[jsp][isp].vibc1 =
+          atof(words[6+nrotwords]);
+        params[isp][jsp].vibc2 = params[jsp][isp].vibc2 =
+          atof(words[7+nrotwords]);
       }
-      if (vibrelaxflag == MILWHITEHIGHT) params[isp][jsp].park = params[jsp][isp].park= atof(words[10]);
+      if (vibrelaxflag == MILWHITEHIGHT)
+        params[isp][jsp].park = params[jsp][isp].park =
+          atof(words[8+nrotwords]);
     }
   }
 

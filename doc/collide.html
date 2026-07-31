@@ -31,7 +31,7 @@
 
 <LI>keyword = <I>rotrelax</I> or <I>vibrelax</I> or <I>relaxtype</I> 
 
-<PRE>  <I>rotrelax</I> value = <I>constant</I> or <I>boyd</I>
+<PRE>  <I>rotrelax</I> value = <I>constant</I>, <I>parker</I>, or <I>boyd</I>
   <I>vibrelax</I> value = <I>constant</I> or <I>milwhite</I> or <I>milwhite_highT</I>
   <I>relaxtype</I> value = <I>permitdouble</I> or <I>prohibdouble</I> 
 </PRE>
@@ -160,8 +160,10 @@ collision is treated in the same constant manner for every collision,
 using the rotational and vibrational relaxation numbers from the
 species data file, as read by the <A HREF = "species.html">species</A> command.
 </P>
-<P>If <I>rotrelax</I> is set to <I>boyd</I>, two additional parameters are expected 
-on each line for Boyd's rotational relaxation model <A HREF = "#Boyd">(Boyd)</A>:
+<P>If <I>rotrelax</I> is set to <I>parker</I> or <I>boyd</I>, two additional
+parameters are expected on each line. They are used by the selected Parker or
+Boyd rotational relaxation model; the Boyd model is described in
+<A HREF = "#Boyd">(Boyd)</A>:
 </P>
 <PRE>Zrotinf T* 
 </PRE>
@@ -188,6 +190,11 @@ temperatures by introducing a limiting effective vibrational cross-section:
 <LI>b (temperature^(-1/3))
 <LI>sigma_v (distance^2 units)
 </UL>
+<P>Enabled optional parameter groups are appended in the order shown above:
+rotational parameters first, followed by vibrational parameters. Thus, a
+<I>vibrelax</I> model can be used independently: its parameters immediately
+follow <I>alpha</I> when <I>rotrelax</I> is <I>constant</I>.
+</P>
 <P>Thus, if both <I>boyd</I> and <I>milwhite</I> are specified, each line expects 
 8 parameters following the species ID:
 </P>

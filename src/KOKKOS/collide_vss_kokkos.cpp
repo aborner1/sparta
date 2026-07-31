@@ -39,7 +39,7 @@ using namespace SPARTA_NS;
 using namespace MathConst;
 
 enum{NONE,DISCRETE,SMOOTH};            // several files
-enum{CONSTANTROT,BOYD};
+enum{CONSTANTROT,PARKER,BOYD};
 enum{CONSTANTVIB,MILWHITE,MILWHITEHIGHT};
 enum{PERMITDOUBLE,PROHIBDOUBLE};
 
@@ -1693,8 +1693,8 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::One
 
         } else if (vibstyle == SMOOTH) {
 
-            if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite(sp,spb,E_Dispose+p->evib,vibdof);
-            else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite_highT(sp,spb,E_Dispose+p->evib,vibdof);
+            if (vibrelaxflag == MILWHITE) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite(sp,spb,E_Dispose+p->evib,vibdof+transdof);
+            else if (vibrelaxflag == MILWHITEHIGHT) vibn_phi = (1.0 + vibdof/transdof)*vibrel_milwhite_highT(sp,spb,E_Dispose+p->evib,vibdof+transdof);
             else vibn_phi = (1.0 + vibdof/transdof)*d_species[sp].vibrel[0];
 
             if (vibn_phi >= rand_gen.drand()) {
@@ -1710,7 +1710,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::One
                               1.5-d_params(sp,spb).omega);
               }
               E_Dispose -= p->evib;
-              postcoln.evib += pevib;
+              postcoln.evib += p->evib;
             }
 
         } else if (vibstyle == DISCRETE) {
@@ -1738,7 +1738,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::One
                                    (1.5 - d_params(sp,spb).omega));
                 } while (State_prob < rand_gen.drand());
                 E_Dispose -= p->evib;
-                postcoln.evib += pevib;
+                postcoln.evib += p->evib;
               }
 
             } else if (vibdof > 2) {
@@ -1790,6 +1790,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_PermitDouble(Particle::One
 
       if (rotdof) {
         if (rotrelaxflag == BOYD) rotn_phi = (1.0 + rotdof/transdof)*rotrel_boyd(sp,spb,E_Dispose+p->erot);
+        else if (rotrelaxflag == PARKER) rotn_phi = (1.0 + rotdof/transdof)*rotrel_parker(sp,spb,E_Dispose+p->erot);
         else rotn_phi = (1.0 + rotdof/transdof)*d_species[sp].rotrel;
 
         if (rotn_phi >= rand_gen.drand()) {
@@ -2013,6 +2014,7 @@ void CollideVSSKokkos::EEXCHANGE_NonReactingEDisposal_ProhibDouble(Particle::One
             } else {
                 factor *= 1/(1-phi);
                 if (rotrelaxflag == BOYD) phi = factor*(1.0 + rotdof/transdof)*rotrel_boyd(sp,spb,E_Dispose+p->erot);
+                else if (rotrelaxflag == PARKER) phi = factor*(1.0 + rotdof/transdof)*rotrel_parker(sp,spb,E_Dispose+p->erot);
                 else phi = factor*(1.0 + rotdof/transdof)*d_species[sp].rotrel;
 
                 if (phi >= rand_gen.drand()) {
@@ -2393,6 +2395,25 @@ double CollideVSSKokkos::rotrel_boyd(int isp, int jsp, double Ec) const
   return rotphi;
 }
 
+/* ---------------------------------------------------------------------------
+   compute a variable rotational relaxation parameter using Parker's formula
+   with the VSS correction factor
+------------------------------------------------------------------------------ */
+
+KOKKOS_INLINE_FUNCTION
+double CollideVSSKokkos::rotrel_parker(int isp, int jsp, double Ec) const
+{
+  double omega = d_params(isp,isp).omega;
+  double Tr = Ec / (boltz * (2.5 - omega + d_species[isp].rotdof/2.0));
+  double theta = d_params(isp,isp).tstar / Tr;
+  double a = MY_PI * (1.0 + 0.25*MY_PI);
+  double b = 0.5 * MY_PI * MY_PIS;
+  double Zparker = d_params(isp,isp).rotc1 / (1.0 + a*theta + b*sqrt(theta));
+  double nu = d_params(isp,jsp).omega - 0.5;
+  double Zrot = (15.0*MY_PI) / (2.0*(6.0-2.0*nu)*(4.0-2.0*nu)) * Zparker;
+  return 1.0 / Zrot;
+}
+
 /* --------------------------------------------------------------------------------------
    compute a variable vibrational relaxation parameter using Millikan-White's expression
 ----------------------------------------------------------------------------------------- */
@@ -2405,9 +2426,9 @@ double CollideVSSKokkos::vibrel_milwhite(int isp, int jsp, double Ec, double dof
   double diam = d_params(isp,jsp).diam;
   double tref = d_params(isp,jsp).tref;
   double mr = d_params(isp,jsp).mr;
-  double Zmw = 4.0 * MY_PIS * pow(diam,2.0) * pow(tref,omega-0.5)
-                  * pow(Tr,-omega) * 101325.0 * exp(d_params(isp,isp).vibc1
-                  * (pow(Tr,-1.0/3.0) - d_params(isp,isp).vibc2) - 18.42) /
+  double Zmw = 2.0 * sqrt(2.0) * MY_PIS * pow(diam,2.0) * pow(tref,omega-0.5)
+                  * pow(Tr,-omega) * 101325.0 * exp(d_params(isp,jsp).vibc1
+                  * (pow(Tr,-1.0/3.0) - d_params(isp,jsp).vibc2) - 18.42) /
                   sqrt(mr * boltz);
   double vibphi = 1.0 / Zmw;
   return vibphi;
@@ -2426,12 +2447,12 @@ double CollideVSSKokkos::vibrel_milwhite_highT(int isp, int jsp, double Ec, doub
   double diam = d_params(isp,jsp).diam;
   double tref = d_params(isp,jsp).tref;
   double mr = d_params(isp,jsp).mr;
-  double Zmw = 4.0 * MY_PIS * pow(diam,2.0) * pow(tref,omega-0.5)
-                  * pow(Tr,-omega) * 101325.0 * exp(d_params(isp,isp).vibc1
-                  * (pow(Tr,-1.0/3.0) - d_params(isp,isp).vibc2) - 18.42) /
+  double Zmw = 2.0 * sqrt(2.0) * MY_PIS * pow(diam,2.0) * pow(tref,omega-0.5)
+                  * pow(Tr,-omega) * 101325.0 * exp(d_params(isp,jsp).vibc1
+                  * (pow(Tr,-1.0/3.0) - d_params(isp,jsp).vibc2) - 18.42) /
                   sqrt(mr * boltz);
-  double Zpark = 4.0 * MY_PI * pow(diam,2.0) * pow(tref,omega-0.5)
-                 * pow(Tr,omega) / (2.5e9 * d_params(isp,isp).park);
+  double Zpark = MY_PI * pow(diam,2.0) * pow(tref,omega-0.5)
+                 * pow(Tr,2.5-omega) / (2.5e9 * d_params(isp,jsp).park);
   double vibphi = 1.0 / (Zmw + Zpark);
   return vibphi;
 }
